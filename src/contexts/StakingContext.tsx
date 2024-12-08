@@ -17,22 +17,7 @@ import {
   UserStake
 } from '@/utils/staking';
 
-interface StakingPool {
-  apy: number;
-  totalStaked: number;
-  rewardToken: string;
-  tokenAddress: string;
-}
-
-interface UserStake {
-  stakedAmount: number;
-  rewardsEarned: number;
-  stakingDuration: number;
-  startTime: number;
-  rewardToken: string;
-}
-
-interface StakingContextType {
+export interface StakingContextType {
   userStakes: UserStake[];
   stakingPools: StakingPool[];
   isLoading: boolean;
