@@ -22,6 +22,10 @@ export function StakingPool({ onError }: StakingPoolProps) {
     claimMockxRewards,
   } = useStaking();
 
+  if (!solxPool || !mockxPool) {
+    return <div>Loading staking pools...</div>;
+  }
+
   return (
     <div className="space-y-8">
       {/* Solx Staking Pool */}
