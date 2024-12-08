@@ -1,396 +1,216 @@
 'use client';
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { BigNumberish } from 'ethers';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
-import { Connection, PublicKey, Transaction } from '@solana/web3.js';
-import { BN } from 'bn.js';
+import { PublicKey, Transaction } from '@solana/web3.js';
+import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { useToast } from '@/components/ui/use-toast';
+import { handleError } from '@/utils/errorHandling';
 import {
-  SOLX_TOKEN_MINT,
-  MOCKX_TOKEN_MINT,
   createStakeInstruction,
   createUnstakeInstruction,
   createClaimRewardsInstruction,
-  getStakeAccountInfo,
-  getPoolInfo,
+  calculatePendingRewards,
+  formatStakeAmount,
+  parseStakeAmount,
+  StakingPool,
+  UserStake
 } from '@/utils/staking';
 
 interface StakingPool {
   apy: number;
-  totalStaked: BigNumberish;
+  totalStaked: number;
   rewardToken: string;
   tokenAddress: string;
 }
 
 interface UserStake {
-  stakedAmount: BigNumberish;
-  rewardsEarned: BigNumberish;
+  stakedAmount: number;
+  rewardsEarned: number;
   stakingDuration: number;
   startTime: number;
   rewardToken: string;
 }
 
 interface StakingContextType {
-  solxPool: StakingPool;
-  mockxPool: StakingPool;
-  userSolxStake?: UserStake;
-  userMockxStake?: UserStake;
-  stakeSolx: (amount: BigNumberish, duration: number, rewardToken: string) => Promise<void>;
-  stakeMockx: (amount: BigNumberish, duration: number, rewardToken: string) => Promise<void>;
-  unstakeSolx: (amount: BigNumberish) => Promise<void>;
-  unstakeMockx: (amount: BigNumberish) => Promise<void>;
-  claimSolxRewards: () => Promise<void>;
-  claimMockxRewards: () => Promise<void>;
+  userStakes: UserStake[];
+  stakingPools: StakingPool[];
+  isLoading: boolean;
+  stake: (poolAddress: string, amount: number, duration: number, rewardType: string) => Promise<void>;
+  unstake: (poolAddress: string) => Promise<void>;
+  claimRewards: (poolAddress: string) => Promise<void>;
+  refreshStakingData: () => Promise<void>;
 }
 
-const StakingContext = createContext<StakingContextType | undefined>(undefined);
+const StakingContext = createContext<StakingContextType>({
+  userStakes: [],
+  stakingPools: [],
+  isLoading: false,
+  stake: async () => {},
+  unstake: async () => {},
+  claimRewards: async () => {},
+  refreshStakingData: async () => {},
+});
 
-export function StakingProvider({ children }: { children: React.ReactNode }) {
+export const useStaking = () => useContext(StakingContext);
+
+export const StakingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { connection } = useConnection();
-  const wallet = useWallet();
+  const { publicKey, sendTransaction } = useWallet();
   const { toast } = useToast();
-  
-  const [solxPool, setSolxPool] = useState<StakingPool>({
-    apy: 60.0,
-    totalStaked: BigInt(0),
-    rewardToken: 'SOLX',
-    tokenAddress: SOLX_TOKEN_MINT.toString(),
-  });
+  const [isLoading, setIsLoading] = useState(false);
+  const [userStakes, setUserStakes] = useState<UserStake[]>([]);
+  const [stakingPools, setStakingPools] = useState<StakingPool[]>([]);
 
-  const [mockxPool, setMockxPool] = useState<StakingPool>({
-    apy: 60.0,
-    totalStaked: BigInt(0),
-    rewardToken: 'MOCKX',
-    tokenAddress: MOCKX_TOKEN_MINT.toString(),
-  });
+  const refreshStakingData = useCallback(async () => {
+    if (!publicKey) return;
+    
+    try {
+      setIsLoading(true);
+      // Fetch user stakes and staking pools data from your program
+      // This is a placeholder implementation
+      const fetchedStakes: UserStake[] = [];
+      const fetchedPools: StakingPool[] = [];
+      
+      setUserStakes(fetchedStakes);
+      setStakingPools(fetchedPools);
+    } catch (error) {
+      const handledError = handleError(error, 'Refresh Staking Data');
+      toast({
+        title: 'Error refreshing staking data',
+        description: handledError.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [publicKey, connection, toast]);
 
-  const [userSolxStake, setUserSolxStake] = useState<UserStake>();
-  const [userMockxStake, setUserMockxStake] = useState<UserStake>();
-
-  // Fetch pool and stake information
   useEffect(() => {
-    const fetchData = async () => {
-      if (!wallet.publicKey) return;
+    refreshStakingData();
+  }, [refreshStakingData]);
 
-      try {
-        // Fetch SOLX pool info
-        const solxPoolInfo = await getPoolInfo(connection, SOLX_TOKEN_MINT);
-        if (solxPoolInfo) {
-          setSolxPool(prev => ({
-            ...prev,
-            totalStaked: solxPoolInfo.totalStaked,
-          }));
-        }
-
-        // Fetch MOCKX pool info
-        const mockxPoolInfo = await getPoolInfo(connection, MOCKX_TOKEN_MINT);
-        if (mockxPoolInfo) {
-          setMockxPool(prev => ({
-            ...prev,
-            totalStaked: mockxPoolInfo.totalStaked,
-          }));
-        }
-
-        // Fetch user SOLX stake info
-        const solxStakeInfo = await getStakeAccountInfo(connection, wallet.publicKey, SOLX_TOKEN_MINT);
-        if (solxStakeInfo) {
-          setUserSolxStake({
-            stakedAmount: solxStakeInfo.stakedAmount,
-            rewardsEarned: solxStakeInfo.rewardsEarned,
-            stakingDuration: solxStakeInfo.stakingDuration,
-            startTime: solxStakeInfo.startTime,
-            rewardToken: solxStakeInfo.rewardToken.toString(),
-          });
-        }
-
-        // Fetch user MOCKX stake info
-        const mockxStakeInfo = await getStakeAccountInfo(connection, wallet.publicKey, MOCKX_TOKEN_MINT);
-        if (mockxStakeInfo) {
-          setUserMockxStake({
-            stakedAmount: mockxStakeInfo.stakedAmount,
-            rewardsEarned: mockxStakeInfo.rewardsEarned,
-            stakingDuration: mockxStakeInfo.stakingDuration,
-            startTime: mockxStakeInfo.startTime,
-            rewardToken: mockxStakeInfo.rewardToken.toString(),
-          });
-        }
-      } catch (error) {
-        console.error('Error fetching staking data:', error);
-      }
-    };
-
-    fetchData();
-    // Set up interval to refresh data
-    const interval = setInterval(fetchData, 30000); // Refresh every 30 seconds
-
-    return () => clearInterval(interval);
-  }, [connection, wallet.publicKey]);
-
-  const stakeSolx = useCallback(async (amount: BigNumberish, duration: number, rewardToken: string) => {
-    if (!wallet.publicKey || !wallet.signTransaction) {
-      toast({
-        title: 'Wallet not connected',
-        description: 'Please connect your wallet to stake SOLX tokens',
-        variant: 'destructive',
-      });
-      return;
-    }
-
+  const stake = async (poolAddress: string, amount: number, duration: number, rewardType: string) => {
+    if (!publicKey) throw new Error('Wallet not connected');
+    
     try {
-      const rewardTokenMint = rewardToken === 'SOLX' ? SOLX_TOKEN_MINT : MOCKX_TOKEN_MINT;
-      const instructions = await createStakeInstruction(
+      setIsLoading(true);
+      const poolPubkey = new PublicKey(poolAddress);
+      const instruction = createStakeInstruction(
         connection,
-        wallet.publicKey,
-        SOLX_TOKEN_MINT,
-        new BN(amount.toString()),
+        publicKey,
+        poolPubkey,
+        amount,
         duration,
-        rewardTokenMint
+        rewardType
       );
 
-      const transaction = new Transaction().add(...instructions);
-      const { blockhash } = await connection.getLatestBlockhash();
-      transaction.recentBlockhash = blockhash;
-      transaction.feePayer = wallet.publicKey;
+      const transaction = new Transaction().add(instruction);
+      const signature = await sendTransaction(transaction, connection);
+      await connection.confirmTransaction(signature);
 
-      const signedTx = await wallet.signTransaction(transaction);
-      const txid = await connection.sendRawTransaction(signedTx.serialize());
-      await connection.confirmTransaction(txid);
-
+      await refreshStakingData();
+      
       toast({
-        title: 'Staking Successful',
-        description: `Successfully staked ${amount.toString()} SOLX tokens`,
+        title: 'Stake successful',
+        description: `Successfully staked ${formatStakeAmount(amount)} tokens`,
       });
     } catch (error) {
+      const handledError = handleError(error, 'Stake');
       toast({
-        title: 'Staking Failed',
-        description: error instanceof Error ? error.message : 'Failed to stake SOLX tokens',
+        title: 'Staking failed',
+        description: handledError.message,
         variant: 'destructive',
       });
+      throw error;
+    } finally {
+      setIsLoading(false);
     }
-  }, [connection, wallet, toast]);
+  };
 
-  const stakeMockx = useCallback(async (amount: BigNumberish, duration: number, rewardToken: string) => {
-    if (!wallet.publicKey || !wallet.signTransaction) {
-      toast({
-        title: 'Wallet not connected',
-        description: 'Please connect your wallet to stake MOCKX tokens',
-        variant: 'destructive',
-      });
-      return;
-    }
-
+  const unstake = async (poolAddress: string) => {
+    if (!publicKey) throw new Error('Wallet not connected');
+    
     try {
-      const rewardTokenMint = rewardToken === 'SOLX' ? SOLX_TOKEN_MINT : MOCKX_TOKEN_MINT;
-      const instructions = await createStakeInstruction(
+      setIsLoading(true);
+      const poolPubkey = new PublicKey(poolAddress);
+      const instruction = createUnstakeInstruction(
         connection,
-        wallet.publicKey,
-        MOCKX_TOKEN_MINT,
-        new BN(amount.toString()),
-        duration,
-        rewardTokenMint
-      );
-
-      const transaction = new Transaction().add(...instructions);
-      const { blockhash } = await connection.getLatestBlockhash();
-      transaction.recentBlockhash = blockhash;
-      transaction.feePayer = wallet.publicKey;
-
-      const signedTx = await wallet.signTransaction(transaction);
-      const txid = await connection.sendRawTransaction(signedTx.serialize());
-      await connection.confirmTransaction(txid);
-
-      toast({
-        title: 'Staking Successful',
-        description: `Successfully staked ${amount.toString()} MOCKX tokens`,
-      });
-    } catch (error) {
-      toast({
-        title: 'Staking Failed',
-        description: error instanceof Error ? error.message : 'Failed to stake MOCKX tokens',
-        variant: 'destructive',
-      });
-    }
-  }, [connection, wallet, toast]);
-
-  const unstakeSolx = useCallback(async (amount: BigNumberish) => {
-    if (!wallet.publicKey || !wallet.signTransaction) {
-      toast({
-        title: 'Cannot Unstake',
-        description: 'Please connect your wallet and ensure you have staked tokens',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    try {
-      const instruction = await createUnstakeInstruction(
-        wallet.publicKey,
-        SOLX_TOKEN_MINT,
-        new BN(amount.toString())
+        publicKey,
+        poolPubkey
       );
 
       const transaction = new Transaction().add(instruction);
-      const { blockhash } = await connection.getLatestBlockhash();
-      transaction.recentBlockhash = blockhash;
-      transaction.feePayer = wallet.publicKey;
+      const signature = await sendTransaction(transaction, connection);
+      await connection.confirmTransaction(signature);
 
-      const signedTx = await wallet.signTransaction(transaction);
-      const txid = await connection.sendRawTransaction(signedTx.serialize());
-      await connection.confirmTransaction(txid);
-
+      await refreshStakingData();
+      
       toast({
-        title: 'Unstaking Successful',
-        description: `Successfully unstaked ${amount.toString()} SOLX tokens`,
+        title: 'Unstake successful',
+        description: 'Successfully unstaked tokens',
       });
     } catch (error) {
+      const handledError = handleError(error, 'Unstake');
       toast({
-        title: 'Unstaking Failed',
-        description: error instanceof Error ? error.message : 'Failed to unstake SOLX tokens',
+        title: 'Unstaking failed',
+        description: handledError.message,
         variant: 'destructive',
       });
+      throw error;
+    } finally {
+      setIsLoading(false);
     }
-  }, [connection, wallet, toast]);
+  };
 
-  const unstakeMockx = useCallback(async (amount: BigNumberish) => {
-    if (!wallet.publicKey || !wallet.signTransaction) {
-      toast({
-        title: 'Cannot Unstake',
-        description: 'Please connect your wallet and ensure you have staked tokens',
-        variant: 'destructive',
-      });
-      return;
-    }
-
+  const claimRewards = async (poolAddress: string) => {
+    if (!publicKey) throw new Error('Wallet not connected');
+    
     try {
-      const instruction = await createUnstakeInstruction(
-        wallet.publicKey,
-        MOCKX_TOKEN_MINT,
-        new BN(amount.toString())
+      setIsLoading(true);
+      const poolPubkey = new PublicKey(poolAddress);
+      const instruction = createClaimRewardsInstruction(
+        connection,
+        publicKey,
+        poolPubkey
       );
 
       const transaction = new Transaction().add(instruction);
-      const { blockhash } = await connection.getLatestBlockhash();
-      transaction.recentBlockhash = blockhash;
-      transaction.feePayer = wallet.publicKey;
+      const signature = await sendTransaction(transaction, connection);
+      await connection.confirmTransaction(signature);
 
-      const signedTx = await wallet.signTransaction(transaction);
-      const txid = await connection.sendRawTransaction(signedTx.serialize());
-      await connection.confirmTransaction(txid);
-
+      await refreshStakingData();
+      
       toast({
-        title: 'Unstaking Successful',
-        description: `Successfully unstaked ${amount.toString()} MOCKX tokens`,
+        title: 'Claim successful',
+        description: 'Successfully claimed rewards',
       });
     } catch (error) {
+      const handledError = handleError(error, 'Claim Rewards');
       toast({
-        title: 'Unstaking Failed',
-        description: error instanceof Error ? error.message : 'Failed to unstake MOCKX tokens',
+        title: 'Claiming rewards failed',
+        description: handledError.message,
         variant: 'destructive',
       });
+      throw error;
+    } finally {
+      setIsLoading(false);
     }
-  }, [connection, wallet, toast]);
-
-  const claimSolxRewards = useCallback(async () => {
-    if (!wallet.publicKey || !wallet.signTransaction) {
-      toast({
-        title: 'Cannot Claim Rewards',
-        description: 'Please connect your wallet and ensure you have staked tokens',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    try {
-      const instruction = await createClaimRewardsInstruction(
-        wallet.publicKey,
-        SOLX_TOKEN_MINT
-      );
-
-      const transaction = new Transaction().add(instruction);
-      const { blockhash } = await connection.getLatestBlockhash();
-      transaction.recentBlockhash = blockhash;
-      transaction.feePayer = wallet.publicKey;
-
-      const signedTx = await wallet.signTransaction(transaction);
-      const txid = await connection.sendRawTransaction(signedTx.serialize());
-      await connection.confirmTransaction(txid);
-
-      toast({
-        title: 'Rewards Claimed',
-        description: 'Successfully claimed SOLX staking rewards',
-      });
-    } catch (error) {
-      toast({
-        title: 'Claiming Failed',
-        description: error instanceof Error ? error.message : 'Failed to claim SOLX rewards',
-        variant: 'destructive',
-      });
-    }
-  }, [connection, wallet, toast]);
-
-  const claimMockxRewards = useCallback(async () => {
-    if (!wallet.publicKey || !wallet.signTransaction) {
-      toast({
-        title: 'Cannot Claim Rewards',
-        description: 'Please connect your wallet and ensure you have staked tokens',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    try {
-      const instruction = await createClaimRewardsInstruction(
-        wallet.publicKey,
-        MOCKX_TOKEN_MINT
-      );
-
-      const transaction = new Transaction().add(instruction);
-      const { blockhash } = await connection.getLatestBlockhash();
-      transaction.recentBlockhash = blockhash;
-      transaction.feePayer = wallet.publicKey;
-
-      const signedTx = await wallet.signTransaction(transaction);
-      const txid = await connection.sendRawTransaction(signedTx.serialize());
-      await connection.confirmTransaction(txid);
-
-      toast({
-        title: 'Rewards Claimed',
-        description: 'Successfully claimed MOCKX staking rewards',
-      });
-    } catch (error) {
-      toast({
-        title: 'Claiming Failed',
-        description: error instanceof Error ? error.message : 'Failed to claim MOCKX rewards',
-        variant: 'destructive',
-      });
-    }
-  }, [connection, wallet, toast]);
+  };
 
   return (
     <StakingContext.Provider
       value={{
-        solxPool,
-        mockxPool,
-        userSolxStake,
-        userMockxStake,
-        stakeSolx,
-        stakeMockx,
-        unstakeSolx,
-        unstakeMockx,
-        claimSolxRewards,
-        claimMockxRewards,
+        userStakes,
+        stakingPools,
+        isLoading,
+        stake,
+        unstake,
+        claimRewards,
+        refreshStakingData,
       }}
     >
       {children}
     </StakingContext.Provider>
   );
-}
-
-export function useStaking() {
-  const context = useContext(StakingContext);
-  if (context === undefined) {
-    throw new Error('useStaking must be used within a StakingProvider');
-  }
-  return context;
-}
+};
