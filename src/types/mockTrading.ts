@@ -30,6 +30,7 @@ export interface MockPosition {
 }
 
 export interface MockBalance {
+  symbol: string;
   asset: string;
   free: number;
   locked: number;
@@ -82,4 +83,9 @@ export interface MockUser {
     averageProfit: number;
     averageLoss: number;
   };
+}
+
+export interface MockTradingContextType {
+  balances: MockBalance[];
+  updateBalance: (symbol: string, amount: number, type: 'add' | 'subtract', balanceType: 'free' | 'locked') => void;
 }

@@ -118,6 +118,33 @@ export function TokenSection() {
                 <li>• Participate in governance decisions</li>
                 <li>• Access to exclusive features and trading pairs</li>
               </ul>
+              
+              <style dangerouslySetInnerHTML={{ __html: `
+                #dexscreener-embed{
+                  position:relative;
+                  width:100%;
+                  padding-bottom:125%;
+                }
+                @media(min-width:1400px){
+                  #dexscreener-embed{
+                    padding-bottom:65%;
+                  }
+                }
+                #dexscreener-embed iframe{
+                  position:absolute;
+                  width:100%;
+                  height:100%;
+                  top:0;
+                  left:0;
+                  border:0;
+                }
+              `}} />
+              <div id="dexscreener-embed" className="mt-6">
+                <iframe 
+                  src="https://dexscreener.com/solana/6xCSREemPY8K9mVE5oQSEPMUa8XU7Je2XKnY6sqU9M1E?embed=1&loadChartSettings=0&trades=0&chartLeftToolbar=0&chartTheme=dark&theme=dark&chartStyle=0&chartType=usd&interval=15"
+                  title="DEXScreener SOLX/USDC"
+                />
+              </div>
             </div>
 
             <div className="grid gap-6">

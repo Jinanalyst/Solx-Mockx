@@ -1,148 +1,89 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
+import { formatTradingPair } from '@/utils/tradingView';
 
-declare global {
-  interface Window {
-    TradingView: any;
-  }
-}
-
-interface TradingViewProps {
-  pair?: string;
+export interface TradingViewWidgetProps {
   theme?: 'light' | 'dark';
-  interval?: '1' | '3' | '5' | '15' | '30' | '60' | '120' | '240' | '1D' | '1W' | '1M';
-  chartType?: '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9';
-  height?: string;
+  symbol?: string;
+  interval?: string;
+  container?: string;
   width?: string;
-  indicators?: string[];
-  showToolbar?: boolean;
-  backgroundColor?: string;
-  gridColor?: string;
+  height?: string;
 }
 
-const DEFAULT_PAIR = 'SOL/USDC';
-const CONTAINER_ID = 'tradingview_widget';
+let tvScriptLoadingPromise: Promise<void>;
 
-const formatTradingSymbol = (pair: string = DEFAULT_PAIR): string => {
-  const [base, quote] = pair.replace(/\s+/g, '').split('/');
-  
-  const symbolMap: { [key: string]: string } = {
-    'SOL': 'SOL',
-    'SOLX': 'SOLX',
-    'BTC': 'BTC',
-    'USDC': 'USDC',
-    'USDT': 'USDT',
-    'ETH': 'ETH',
-  };
-
-  const baseSymbol = symbolMap[base] || base;
-  const quoteSymbol = symbolMap[quote] || quote;
-
-  // Default to Binance for now, but we can add more exchanges later
-  return `BINANCE:${baseSymbol}${quoteSymbol}`;
-};
-
-export function TradingViewWidget({ 
-  pair = DEFAULT_PAIR,
-  theme = 'dark',
-  interval = '15',
-  chartType = '1',
-  height = '500px',
+export default function TradingViewWidget({ 
+  theme = 'dark', 
+  symbol = 'BTCUSDT',
+  interval = 'D',
+  container = 'tradingview_widget',
   width = '100%',
-  indicators = ['RSI', 'MASimple@tv-basicstudies', 'MACD@tv-basicstudies'],
-  showToolbar = true,
-  backgroundColor = theme === 'dark' ? '#1a1a1a' : '#ffffff',
-  gridColor = theme === 'dark' ? '#363c4e' : '#f0f3fa',
-}: TradingViewProps) {
-  const [isScriptLoaded, setIsScriptLoaded] = useState(false);
-  const container = useRef<HTMLDivElement>(null);
+  height = '100%'
+}: TradingViewWidgetProps) {
+  const onLoadScriptRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    const loadTradingViewScript = () => {
-      return new Promise<void>((resolve) => {
-        if (window.TradingView) {
-          resolve();
-          return;
-        }
+    onLoadScriptRef.current = createWidget;
 
+    if (!tvScriptLoadingPromise) {
+      tvScriptLoadingPromise = new Promise((resolve) => {
         const script = document.createElement('script');
-        script.type = 'text/javascript';
+        script.id = 'tradingview-widget-loading-script';
         script.src = 'https://s3.tradingview.com/tv.js';
-        script.async = true;
-        script.onload = () => resolve();
+        script.type = 'text/javascript';
+        script.onload = resolve as () => void;
         document.head.appendChild(script);
       });
-    };
-
-    const initWidget = async () => {
-      if (!container.current) return;
-
-      try {
-        await loadTradingViewScript();
-        setIsScriptLoaded(true);
-
-        const symbol = formatTradingSymbol(pair);
-        
-        if (container.current) {
-          new window.TradingView.widget({
-            container_id: CONTAINER_ID,
-            symbol,
-            interval,
-            theme,
-            style: chartType,
-            locale: 'en',
-            toolbar_bg: backgroundColor,
-            enable_publishing: false,
-            allow_symbol_change: true,
-            save_image: false,
-            height,
-            width,
-            studies: indicators,
-            show_popup_button: true,
-            popup_width: '1000',
-            popup_height: '650',
-            hide_side_toolbar: !showToolbar,
-            backgroundColor,
-            gridColor,
-            library_path: '/charting_library/',
-            charts_storage_url: 'https://saveload.tradingview.com',
-            charts_storage_api_version: '1.1',
-            client_id: 'tradingview.com',
-            user_id: 'public_user',
-            fullscreen: false,
-            autosize: true,
-            studies_overrides: {},
-            overrides: {
-              'mainSeriesProperties.candleStyle.upColor': '#26a69a',
-              'mainSeriesProperties.candleStyle.downColor': '#ef5350',
-              'mainSeriesProperties.candleStyle.wickUpColor': '#26a69a',
-              'mainSeriesProperties.candleStyle.wickDownColor': '#ef5350',
-            },
-          });
-        }
-      } catch (error) {
-        console.error('Failed to initialize TradingView widget:', error);
-      }
-    };
-
-    if (!isScriptLoaded) {
-      initWidget();
     }
 
+    tvScriptLoadingPromise.then(() => onLoadScriptRef.current && onLoadScriptRef.current());
+
     return () => {
-      if (container.current) {
-        container.current.innerHTML = '';
-      }
+      onLoadScriptRef.current = null;
     };
-  }, [pair, theme, interval, chartType, height, width, indicators, showToolbar, backgroundColor, gridColor, isScriptLoaded]);
+
+    function createWidget() {
+      if (document.getElementById(container) && 'TradingView' in window) {
+        const [base, quote] = symbol.match(/([A-Z]+)/g) || ['BTC', 'USDT'];
+        const formattedSymbol = formatTradingPair(base, quote);
+
+        new (window as any).TradingView.widget({
+          autosize: true,
+          symbol: formattedSymbol,
+          interval: interval,
+          timezone: "Etc/UTC",
+          theme: theme,
+          style: "1",
+          locale: "en",
+          toolbar_bg: "#f1f3f6",
+          enable_publishing: false,
+          allow_symbol_change: true,
+          container_id: container,
+          hide_side_toolbar: false,
+          studies: [
+            "MASimple@tv-basicstudies",
+            "RSI@tv-basicstudies",
+            "MACD@tv-basicstudies"
+          ],
+          save_image: false,
+          show_popup_button: true,
+          popup_width: "1000",
+          popup_height: "650",
+        });
+      }
+    }
+  }, [theme, symbol, interval, container]);
 
   return (
-    <div 
-      ref={container} 
-      id={CONTAINER_ID}
-      style={{ height, width }}
-      className="w-full h-full"
-    />
+    <div className='tradingview-widget-container' style={{ height, width }}>
+      <div id={container} style={{ height: 'calc(100% - 32px)', width: '100%' }} />
+      <div className="tradingview-widget-copyright">
+        <a href="https://www.tradingview.com/" rel="noopener noreferrer" target="_blank">
+          <span className="blue-text">Track all markets on TradingView</span>
+        </a>
+      </div>
+    </div>
   );
 }

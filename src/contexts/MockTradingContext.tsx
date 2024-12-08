@@ -10,15 +10,17 @@ import {
   MockUser,
   OrderSide,
   OrderType,
+  MockBalance,
+  MockTradingContextType,
 } from '@/types/mockTrading';
 
-export interface MockBalance {
-  asset: string;
-  free: number;
-  locked: number;
-}
+const initialBalances: MockBalance[] = [
+  { asset: 'SOLX', symbol: 'SOLX', free: 1000, locked: 0 },
+  { asset: 'MOCKX', symbol: 'MOCKX', free: 5000, locked: 0 },
+  { asset: 'USDC', symbol: 'USDC', free: 10000, locked: 0 },
+];
 
-interface MockTradingContextType {
+export interface MockTradingContextType {
   positions: MockPosition[];
   balances: MockBalance[];
   orders: MockOrder[];
@@ -36,6 +38,7 @@ interface MockTradingContextType {
   ) => Promise<MockOrder>;
   closePosition: (positionId: string) => Promise<void>;
   refreshData: () => void;
+  updateBalance: (symbol: string, amount: number, type: 'add' | 'subtract', balanceType: 'free' | 'locked') => void;
 }
 
 const MockTradingContext = createContext<MockTradingContextType | undefined>(undefined);
@@ -43,7 +46,7 @@ const MockTradingContext = createContext<MockTradingContextType | undefined>(und
 export function MockTradingProvider({ children }: { children: ReactNode }) {
   const [userId] = useState(() => 'mock-user-' + Math.random().toString(36).substr(2, 9));
   const [positions, setPositions] = useState<MockPosition[]>([]);
-  const [balances, setBalances] = useState<MockBalance[]>([]);
+  const [balances, setBalances] = useState<MockBalance[]>(initialBalances);
   const [orders, setOrders] = useState<MockOrder[]>([]);
   const [trades, setTrades] = useState<MockTrade[]>([]);
   const [orderBook, setOrderBook] = useState<OrderBook>();
@@ -107,6 +110,22 @@ export function MockTradingProvider({ children }: { children: ReactNode }) {
     }
   }, [userId, refreshData]);
 
+  const updateBalance = useCallback((symbol: string, amount: number, type: 'add' | 'subtract', balanceType: 'free' | 'locked') => {
+    setBalances(prevBalances => {
+      return prevBalances.map(balance => {
+        if (balance.symbol === symbol) {
+          const currentAmount = balance[balanceType];
+          const newAmount = type === 'add' ? currentAmount + amount : currentAmount - amount;
+          return {
+            ...balance,
+            [balanceType]: Math.max(0, newAmount)
+          };
+        }
+        return balance;
+      });
+    });
+  }, []);
+
   useEffect(() => {
     refreshData();
     const interval = setInterval(refreshData, 5000);
@@ -125,6 +144,7 @@ export function MockTradingProvider({ children }: { children: ReactNode }) {
       placeOrder,
       closePosition,
       refreshData,
+      updateBalance,
     }}>
       {children}
     </MockTradingContext.Provider>

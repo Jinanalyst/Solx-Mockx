@@ -1,129 +1,106 @@
 'use client';
 
-import { useState } from 'react';
-import { TradingViewWidget } from '@/components/trading/TradingViewWidget';
-import { OrderBook } from '@/components/trading/OrderBook';
-import { TradePanel } from '@/components/trading/TradePanel';
-import { RecentTrades } from '@/components/trading/RecentTrades';
-import { Switch } from '@/components/ui/switch';
-import { Sun, Moon } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import TradingViewWidget from '@/components/TradingViewWidget';
+import { TradingPair, getTradingPairs } from '@/utils/tradingView';
 
-function MockTradingContent() {
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+export default function MockTradingPage() {
+  const [selectedPair, setSelectedPair] = useState<string>('BTCUSDT');
+  const [tradingPairs, setTradingPairs] = useState<TradingPair[]>([]);
 
-  // Mock data
-  const mockData = {
-    asks: [
-      { price: 100100.50, size: 0.235, total: 23.52 },
-      { price: 100095.20, size: 1.523, total: 152.41 },
-      { price: 100090.80, size: 0.876, total: 87.67 },
-    ],
-    bids: [
-      { price: 100075.60, size: 0.456, total: 45.67 },
-      { price: 100070.30, size: 1.789, total: 178.99 },
-      { price: 100065.90, size: 0.987, total: 98.79 },
-    ],
-    lastPrice: 100055.36,
-    change24h: 0.75,
-    high24h: 101234.56,
-    low24h: 99876.54,
-    volume24h: '1,812,156,156.15',
-  };
-
-  const toggleTheme = () => {
-    setTheme(theme === 'dark' ? 'light' : 'dark');
-    document.documentElement.classList.toggle('light-theme');
-  };
+  useEffect(() => {
+    const loadTradingPairs = async () => {
+      const pairs = await getTradingPairs();
+      setTradingPairs(pairs);
+    };
+    loadTradingPairs();
+  }, []);
 
   return (
-    <div className={`flex flex-col min-h-screen ${theme === 'dark' ? 'bg-[#0b0e11]' : 'bg-white'}`}>
-      {/* Top Navigation Bar */}
-      <div className={`h-14 border-b ${theme === 'dark' ? 'border-gray-800' : 'border-gray-200'} flex items-center px-4 justify-between sticky top-0 z-50 bg-inherit`}>
-        <div className="flex items-center space-x-6">
-          {/* Trading Pair Info */}
-          <div className="flex items-center space-x-4">
-            <span className={`text-xl font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>BTC/USDT</span>
-            <div className="flex flex-col">
-              <span className="text-[#02c076] text-lg font-medium">${mockData.lastPrice.toLocaleString()}</span>
-              <span className="text-[#02c076] text-xs">+{mockData.change24h}%</span>
-            </div>
-          </div>
-          
-          {/* Market Stats */}
-          <div className="flex items-center space-x-4 text-sm">
-            <div className="flex flex-col">
-              <span className={`${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>24h High</span>
-              <span className={`${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>${mockData.high24h.toLocaleString()}</span>
-            </div>
-            <div className="flex flex-col">
-              <span className={`${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>24h Low</span>
-              <span className={`${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>${mockData.low24h.toLocaleString()}</span>
-            </div>
-            <div className="flex flex-col">
-              <span className={`${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>24h Volume</span>
-              <span className={`${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>${mockData.volume24h}</span>
-            </div>
-          </div>
-        </div>
+    <div className="flex flex-col w-full h-full min-h-screen bg-gray-900 text-white p-4">
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-2xl font-bold">Mock Trading</h1>
+        <select 
+          value={selectedPair}
+          onChange={(e) => setSelectedPair(e.target.value)}
+          className="bg-gray-800 text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          {tradingPairs.map((pair) => (
+            <option key={`${pair.base}${pair.quote}`} value={`${pair.base}${pair.quote}`}>
+              {pair.description || `${pair.base}/${pair.quote}`}
+            </option>
+          ))}
+        </select>
+      </div>
 
-        {/* Theme Toggle */}
-        <div className="flex items-center space-x-2">
-          <Sun className={`h-4 w-4 ${theme === 'dark' ? 'text-gray-400' : 'text-yellow-500'}`} />
-          <Switch
-            checked={theme === 'dark'}
-            onCheckedChange={toggleTheme}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-grow">
+        {/* Chart Section */}
+        <div className="lg:col-span-2 bg-gray-800 rounded-lg p-4" style={{ height: '600px' }}>
+          <TradingViewWidget 
+            symbol={selectedPair}
+            theme="dark"
+            interval="15"
+            height="100%"
           />
-          <Moon className={`h-4 w-4 ${theme === 'dark' ? 'text-white' : 'text-gray-400'}`} />
         </div>
-      </div>
 
-      {/* Main Content */}
-      <div className="flex flex-1 min-h-0">
-        {/* Left Section - Chart and Order Book */}
-        <div className="flex flex-col flex-[2] min-w-0 border-r border-gray-800">
-          {/* Chart */}
-          <div className="h-[600px] border-b border-gray-800">
-            <TradingViewWidget theme={theme} />
+        {/* Trading Interface */}
+        <div className="bg-gray-800 rounded-lg p-4">
+          <div className="mb-4">
+            <h2 className="text-xl font-semibold mb-2">Order Form</h2>
+            <div className="flex space-x-2 mb-4">
+              <button className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded">
+                Buy
+              </button>
+              <button className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded">
+                Sell
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Price</label>
+                <input 
+                  type="number" 
+                  className="w-full bg-gray-700 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="0.00"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-1">Amount</label>
+                <input 
+                  type="number" 
+                  className="w-full bg-gray-700 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="0.00"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-1">Total</label>
+                <input 
+                  type="number" 
+                  className="w-full bg-gray-700 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="0.00"
+                  readOnly
+                />
+              </div>
+            </div>
           </div>
-          
-          {/* Bottom Section */}
-          <div className="flex flex-1 min-h-0">
-            <OrderBook 
-              className="flex-1 border-r border-gray-800"
-              theme={theme}
-              asks={mockData.asks}
-              bids={mockData.bids}
-            />
-            <RecentTrades 
-              className="flex-1"
-              theme={theme}
-            />
+
+          <div>
+            <h2 className="text-xl font-semibold mb-2">Order Book</h2>
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm text-gray-400">
+                <span>Price</span>
+                <span>Amount</span>
+                <span>Total</span>
+              </div>
+              {/* Add order book entries here */}
+            </div>
           </div>
-        </div>
-
-        {/* Right Section - Trading Panel */}
-        <div className="w-[400px]">
-          <TradePanel theme={theme} />
-        </div>
-      </div>
-
-      {/* Footer */}
-      <div className={`h-12 border-t ${theme === 'dark' ? 'border-gray-800' : 'border-gray-200'} flex items-center px-4 justify-between bg-inherit`}>
-        <div className="flex items-center space-x-4">
-          <span className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-            BTC/USDT +{mockData.change24h}%
-          </span>
-        </div>
-        <div className="flex items-center space-x-4">
-          <span className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-            Last Updated: {new Date().toLocaleTimeString()}
-          </span>
         </div>
       </div>
     </div>
   );
-}
-
-export default function MockTradingPage() {
-  return <MockTradingContent />;
 }
