@@ -12,8 +12,9 @@ import {
   createAssociatedTokenAccountInstruction,
   getAssociatedTokenAddress,
   createTransferInstruction,
-} from '@solana/spl_token';
+} from '@solana/spl-token';
 import { BN } from 'bn.js';
+import { ethers } from 'ethers';
 
 // Program ID for the staking program
 export const STAKING_PROGRAM_ID = new PublicKey('DSwpgjMvXhtGn6BsbqmacdBZyfLj6jSWf3HJpdJtmg6N');
@@ -281,3 +282,95 @@ export async function getPoolInfo(
     return null;
   }
 }
+
+export interface StakingPool {
+  poolAddress: PublicKey;
+  tokenMint: PublicKey;
+  rewardMint: PublicKey;
+  apy: number;
+  totalStaked: number;
+  minStakeAmount: number;
+  maxStakeAmount: number;
+}
+
+export interface UserStake {
+  amount: number;
+  startTime: number;
+  duration: number;
+  rewardType: string;
+  pendingRewards: number;
+}
+
+export const createStakeInstructionNew = (
+  connection: Connection,
+  userAccount: PublicKey,
+  poolAddress: PublicKey,
+  amount: number,
+  duration: number,
+  rewardType: string
+): TransactionInstruction => {
+  // Implementation will depend on your staking program's instruction format
+  return new TransactionInstruction({
+    keys: [
+      { pubkey: userAccount, isSigner: true, isWritable: true },
+      { pubkey: poolAddress, isSigner: false, isWritable: true },
+      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+    ],
+    programId: STAKING_PROGRAM_ID,
+    data: Buffer.from([]) // Add your instruction data here
+  });
+};
+
+export const createUnstakeInstructionNew = (
+  connection: Connection,
+  userAccount: PublicKey,
+  poolAddress: PublicKey
+): TransactionInstruction => {
+  // Implementation will depend on your staking program's instruction format
+  return new TransactionInstruction({
+    keys: [
+      { pubkey: userAccount, isSigner: true, isWritable: true },
+      { pubkey: poolAddress, isSigner: false, isWritable: true },
+      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+    ],
+    programId: STAKING_PROGRAM_ID,
+    data: Buffer.from([]) // Add your instruction data here
+  });
+};
+
+export const createClaimRewardsInstructionNew = (
+  connection: Connection,
+  userAccount: PublicKey,
+  poolAddress: PublicKey
+): TransactionInstruction => {
+  // Implementation will depend on your staking program's instruction format
+  return new TransactionInstruction({
+    keys: [
+      { pubkey: userAccount, isSigner: true, isWritable: true },
+      { pubkey: poolAddress, isSigner: false, isWritable: true },
+      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+    ],
+    programId: STAKING_PROGRAM_ID,
+    data: Buffer.from([]) // Add your instruction data here
+  });
+};
+
+export const calculatePendingRewards = (
+  stakeAmount: number,
+  stakeDuration: number,
+  apy: number,
+  elapsedTime: number
+): number => {
+  const annualReward = stakeAmount * (apy / 100);
+  const dailyReward = annualReward / 365;
+  const daysElapsed = elapsedTime / (24 * 60 * 60 * 1000); // Convert ms to days
+  return dailyReward * daysElapsed;
+};
+
+export const formatStakeAmount = (amount: number): string => {
+  return ethers.formatUnits(amount.toString(), 9); // Assuming 9 decimals for SPL tokens
+};
+
+export const parseStakeAmount = (amount: string): number => {
+  return parseInt(ethers.parseUnits(amount, 9).toString());
+};
