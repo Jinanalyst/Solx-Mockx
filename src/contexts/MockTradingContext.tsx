@@ -13,9 +13,9 @@ import {
 } from '@/types/mockTrading';
 
 export interface MockBalance {
-  token: string;
-  balance: number;
-  usdValue: number;
+  asset: string;
+  free: number;
+  locked: number;
 }
 
 interface MockTradingContextType {
@@ -60,12 +60,11 @@ export function MockTradingProvider({ children }: { children: ReactNode }) {
 
   const refreshData = useCallback(() => {
     try {
-      const userData = mockTradingService.getUserData(userId);
-      setPositions(userData.positions);
-      setBalances(userData.balances);
-      setOrders(userData.orders);
-      setTrades(userData.trades);
-      setPerformance(userData.performance);
+      setPositions(mockTradingService.getUserPositions(userId));
+      setBalances(mockTradingService.getUserBalances(userId));
+      setOrders(mockTradingService.getUserOrders(userId) || []);
+      setTrades(mockTradingService.getUserTrades(userId) || []);
+      setPerformance(mockTradingService.getUserPerformance(userId));
       setOrderBook(mockTradingService.getOrderBook(selectedMarket));
     } catch (error) {
       console.error('Error refreshing mock trading data:', error);

@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { useWallet } from '@solana/wallet-adapter-react';
+import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { Connection, PublicKey, Transaction, SystemProgram } from '@solana/web3.js';
 import { getAccount, getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 
@@ -29,7 +29,8 @@ interface TransactionContextType {
 const TransactionContext = createContext<TransactionContextType | null>(null);
 
 export function TransactionProvider({ children }: { children: ReactNode }) {
-  const { publicKey, signTransaction, connection } = useWallet();
+  const { publicKey, signTransaction } = useWallet();
+  const { connection } = useConnection();
   const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
   const [pendingTransactions, setPendingTransactions] = useState<TransactionRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -110,7 +111,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
             tokenAccount,
             platformTokenAccount,
             publicKey,
-            []
+            publicKey
           )
         );
 
@@ -120,7 +121,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
             tokenAccount,
             platformTokenAccount,
             publicKey,
-            []
+            publicKey
           )
         );
       }

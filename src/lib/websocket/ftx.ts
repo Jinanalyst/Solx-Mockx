@@ -48,9 +48,15 @@ export class FTXWebSocket {
     this.reconnectAttempts = 0;
     
     // Resubscribe to all channels
-    for (const [key] of this.subscriptions) {
+    for (const [key, handlers] of this.subscriptions) {
       const [channel, market] = key.split(':');
-      this.subscribe(channel, market);
+      if (this.ws?.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify({
+          op: 'subscribe',
+          channel,
+          market
+        }));
+      }
     }
   }
 

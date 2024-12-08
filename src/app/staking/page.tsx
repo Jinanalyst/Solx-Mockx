@@ -3,6 +3,7 @@
 import { Suspense } from 'react';
 import { PageLayout } from '@/components/layout/PageLayout';
 import { StakingPool } from '@/components/staking/StakingPool';
+import { TestStaking } from '@/components/staking/TestStaking';
 import { handleError } from '@/utils/errorHandling';
 import { useToast } from '@/components/ui/use-toast';
 
@@ -28,7 +29,13 @@ function StakingContent() {
           </div>
         }
       >
-        <StakingPool onError={handleStakingError} />
+        <div className="space-y-8">
+          <StakingPool onError={handleStakingError} />
+          <div className="border-t pt-8">
+            <h2 className="text-2xl font-bold mb-4">Test Staking Interface</h2>
+            <TestStaking />
+          </div>
+        </div>
       </Suspense>
     </div>
   );

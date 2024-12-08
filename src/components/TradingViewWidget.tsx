@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 declare global {
   interface Window {
@@ -9,7 +9,7 @@ declare global {
 }
 
 interface TradingViewProps {
-  pair: string;
+  pair?: string;
   theme?: 'light' | 'dark';
   interval?: '1' | '3' | '5' | '15' | '30' | '60' | '120' | '240' | '1D' | '1W' | '1M';
   chartType?: '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9';
@@ -21,12 +21,17 @@ interface TradingViewProps {
   gridColor?: string;
 }
 
-const formatTradingSymbol = (pair: string): string => {
+const DEFAULT_PAIR = 'SOL/USDC';
+const CONTAINER_ID = 'tradingview_widget';
+
+const formatTradingSymbol = (pair: string = DEFAULT_PAIR): string => {
   const [base, quote] = pair.replace(/\s+/g, '').split('/');
   
   const symbolMap: { [key: string]: string } = {
+    'SOL': 'SOL',
     'SOLX': 'SOLX',
     'BTC': 'BTC',
+    'USDC': 'USDC',
     'USDT': 'USDT',
     'ETH': 'ETH',
   };
@@ -34,11 +39,12 @@ const formatTradingSymbol = (pair: string): string => {
   const baseSymbol = symbolMap[base] || base;
   const quoteSymbol = symbolMap[quote] || quote;
 
+  // Default to Binance for now, but we can add more exchanges later
   return `BINANCE:${baseSymbol}${quoteSymbol}`;
-}
+};
 
 export function TradingViewWidget({ 
-  pair,
+  pair = DEFAULT_PAIR,
   theme = 'dark',
   interval = '15',
   chartType = '1',
@@ -49,90 +55,94 @@ export function TradingViewWidget({
   backgroundColor = theme === 'dark' ? '#1a1a1a' : '#ffffff',
   gridColor = theme === 'dark' ? '#363c4e' : '#f0f3fa',
 }: TradingViewProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const scriptRef = useRef<HTMLScriptElement | null>(null);
+  const [isScriptLoaded, setIsScriptLoaded] = useState(false);
+  const container = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    const loadTradingViewScript = () => {
+      return new Promise<void>((resolve) => {
+        if (window.TradingView) {
+          resolve();
+          return;
+        }
 
-    const widgetContainer = document.createElement('div');
-    containerRef.current.innerHTML = '';
-    containerRef.current.appendChild(widgetContainer);
+        const script = document.createElement('script');
+        script.type = 'text/javascript';
+        script.src = 'https://s3.tradingview.com/tv.js';
+        script.async = true;
+        script.onload = () => resolve();
+        document.head.appendChild(script);
+      });
+    };
 
-    const script = document.createElement('script');
-    script.type = 'text/javascript';
-    script.async = true;
-    script.src = 'https://s3.tradingview.com/tv.js';
-    
-    script.onload = () => {
-      if (window.TradingView && widgetContainer) {
-        new window.TradingView.widget({
-          container: widgetContainer,
-          symbol: formatTradingSymbol(pair),
-          interval: interval,
-          timezone: 'Etc/UTC',
-          theme: theme,
-          style: chartType,
-          locale: 'en',
-          toolbar_bg: backgroundColor,
-          enable_publishing: false,
-          allow_symbol_change: true,
-          save_image: true,
-          height: height,
-          width: width,
-          studies: indicators,
-          show_popup_button: true,
-          popup_width: '1000',
-          popup_height: '650',
-          hide_side_toolbar: !showToolbar,
-          withdateranges: true,
-          hide_volume: false,
-          scalesProperties: {
-            backgroundColor: backgroundColor,
-            lineColor: gridColor,
-            textColor: theme === 'dark' ? '#d1d4dc' : '#131722',
-          },
-          gridProperties: {
-            color: gridColor,
-          },
-          studies_overrides: {
-            "volume.volume.color.0": theme === 'dark' ? "#363A45" : "#E91E63",
-            "volume.volume.color.1": theme === 'dark' ? "#2196F3" : "#4CAF50",
-          },
-          overrides: {
-            "paneProperties.background": backgroundColor,
-            "paneProperties.vertGridProperties.color": gridColor,
-            "paneProperties.horzGridProperties.color": gridColor,
-            "symbolWatermarkProperties.transparency": 90,
-            "scalesProperties.textColor": theme === 'dark' ? '#AAA' : '#555',
-          },
-        });
+    const initWidget = async () => {
+      if (!container.current) return;
+
+      try {
+        await loadTradingViewScript();
+        setIsScriptLoaded(true);
+
+        const symbol = formatTradingSymbol(pair);
+        
+        if (container.current) {
+          new window.TradingView.widget({
+            container_id: CONTAINER_ID,
+            symbol,
+            interval,
+            theme,
+            style: chartType,
+            locale: 'en',
+            toolbar_bg: backgroundColor,
+            enable_publishing: false,
+            allow_symbol_change: true,
+            save_image: false,
+            height,
+            width,
+            studies: indicators,
+            show_popup_button: true,
+            popup_width: '1000',
+            popup_height: '650',
+            hide_side_toolbar: !showToolbar,
+            backgroundColor,
+            gridColor,
+            library_path: '/charting_library/',
+            charts_storage_url: 'https://saveload.tradingview.com',
+            charts_storage_api_version: '1.1',
+            client_id: 'tradingview.com',
+            user_id: 'public_user',
+            fullscreen: false,
+            autosize: true,
+            studies_overrides: {},
+            overrides: {
+              'mainSeriesProperties.candleStyle.upColor': '#26a69a',
+              'mainSeriesProperties.candleStyle.downColor': '#ef5350',
+              'mainSeriesProperties.candleStyle.wickUpColor': '#26a69a',
+              'mainSeriesProperties.candleStyle.wickDownColor': '#ef5350',
+            },
+          });
+        }
+      } catch (error) {
+        console.error('Failed to initialize TradingView widget:', error);
       }
     };
 
-    const existingScript = document.querySelector('script[src*="tradingview"]');
-    if (existingScript) {
-      existingScript.remove();
+    if (!isScriptLoaded) {
+      initWidget();
     }
 
-    document.head.appendChild(script);
-    scriptRef.current = script;
-
     return () => {
-      if (scriptRef.current) {
-        scriptRef.current.remove();
-      }
-      if (containerRef.current) {
-        containerRef.current.innerHTML = '';
+      if (container.current) {
+        container.current.innerHTML = '';
       }
     };
-  }, [pair, theme, interval, chartType, backgroundColor, gridColor, indicators, showToolbar, height, width]);
+  }, [pair, theme, interval, chartType, height, width, indicators, showToolbar, backgroundColor, gridColor, isScriptLoaded]);
 
   return (
     <div 
-      ref={containerRef} 
+      ref={container} 
+      id={CONTAINER_ID}
       style={{ height, width }}
-      className="rounded-lg overflow-hidden"
+      className="w-full h-full"
     />
   );
 }

@@ -24,7 +24,7 @@ export function Navbar() {
       <div className="flex h-16 items-center px-4">
         <div className="flex items-center space-x-4">
           <Link href="/" className="text-xl font-bold">
-            SolSwap
+            SOLX
           </Link>
           <div className="hidden md:flex md:items-center md:space-x-2">
             {navigation.map((item) => (

@@ -1,5 +1,7 @@
-import { ethers } from 'ethers';
+import { JsonRpcProvider, isAddress, formatEther, getAddress } from 'ethers';
 import { Connection, PublicKey, clusterApiUrl } from '@solana/web3.js';
+
+export type NetworkType = 'MAINNET' | 'TESTNET' | 'DEVNET';
 
 export const NETWORK_CONFIG = {
   SOLANA: {
@@ -17,7 +19,8 @@ export const NETWORK_CONFIG = {
     GOERLI: 5,
     RPC_URLS: {
       MAINNET: 'https://eth-mainnet.g.alchemy.com/v2/your-api-key',
-      GOERLI: 'https://eth-goerli.g.alchemy.com/v2/your-api-key'
+      TESTNET: 'https://eth-goerli.g.alchemy.com/v2/your-api-key',
+      DEVNET: 'https://eth-goerli.g.alchemy.com/v2/your-api-key'
     }
   },
   BASE: {
@@ -25,18 +28,19 @@ export const NETWORK_CONFIG = {
     GOERLI: 84531,
     RPC_URLS: {
       MAINNET: 'https://mainnet.base.org',
-      GOERLI: 'https://goerli.base.org'
+      TESTNET: 'https://goerli.base.org',
+      DEVNET: 'https://goerli.base.org'
     }
   }
 };
 
 export class NetworkManager {
   private solanaConnection: Connection;
-  private ethereumProvider: ethers.providers.JsonRpcProvider;
-  private baseProvider: ethers.providers.JsonRpcProvider;
+  private ethereumProvider: JsonRpcProvider;
+  private baseProvider: JsonRpcProvider;
 
   constructor(
-    network: 'MAINNET' | 'TESTNET' | 'DEVNET' = 'MAINNET',
+    network: NetworkType = 'MAINNET',
     customRpcUrls?: {
       SOLANA?: string;
       ETHEREUM?: string;
@@ -50,12 +54,12 @@ export class NetworkManager {
     );
 
     // Initialize Ethereum provider
-    this.ethereumProvider = new ethers.providers.JsonRpcProvider(
+    this.ethereumProvider = new JsonRpcProvider(
       customRpcUrls?.ETHEREUM || NETWORK_CONFIG.ETHEREUM.RPC_URLS[network]
     );
 
     // Initialize Base provider
-    this.baseProvider = new ethers.providers.JsonRpcProvider(
+    this.baseProvider = new JsonRpcProvider(
       customRpcUrls?.BASE || NETWORK_CONFIG.BASE.RPC_URLS[network]
     );
   }
@@ -70,12 +74,12 @@ export class NetworkManager {
   }
 
   async validateEthereumAddress(address: string): Promise<boolean> {
-    return ethers.utils.isAddress(address);
+    return isAddress(address);
   }
 
   // Base uses the same address format as Ethereum
   async validateBaseAddress(address: string): Promise<boolean> {
-    return ethers.utils.isAddress(address);
+    return isAddress(address);
   }
 
   async getSolanaAddressDetails(address: string) {
@@ -103,20 +107,21 @@ export class NetworkManager {
 
   async getEthereumAddressDetails(address: string) {
     try {
-      const balance = await this.ethereumProvider.getBalance(address);
-      const code = await this.ethereumProvider.getCode(address);
+      const checksumAddress = getAddress(address);
+      const balance = await this.ethereumProvider.getBalance(checksumAddress);
+      const code = await this.ethereumProvider.getCode(checksumAddress);
 
       return {
         isValid: true,
-        balance: ethers.utils.formatEther(balance),
+        balance: parseFloat(formatEther(balance)),
         hasContract: code !== '0x',
-        address: ethers.utils.getAddress(address) // Returns checksum address
+        address: checksumAddress
       };
     } catch (error) {
       console.error('Error getting Ethereum address details:', error);
       return {
         isValid: false,
-        balance: '0',
+        balance: 0,
         hasContract: false,
         address
       };
@@ -125,49 +130,40 @@ export class NetworkManager {
 
   async getBaseAddressDetails(address: string) {
     try {
-      const balance = await this.baseProvider.getBalance(address);
-      const code = await this.baseProvider.getCode(address);
+      const checksumAddress = getAddress(address);
+      const balance = await this.baseProvider.getBalance(checksumAddress);
+      const code = await this.baseProvider.getCode(checksumAddress);
 
       return {
         isValid: true,
-        balance: ethers.utils.formatEther(balance),
+        balance: parseFloat(formatEther(balance)),
         hasContract: code !== '0x',
-        address: ethers.utils.getAddress(address) // Returns checksum address
+        address: checksumAddress
       };
     } catch (error) {
       console.error('Error getting Base address details:', error);
       return {
         isValid: false,
-        balance: '0',
+        balance: 0,
         hasContract: false,
         address
       };
     }
   }
 
-  async validateAddressForNetwork(network: 'SOLANA' | 'ETHEREUM' | 'BASE', address: string): Promise<boolean> {
-    switch (network) {
-      case 'SOLANA':
-        return this.validateSolanaAddress(address);
-      case 'ETHEREUM':
-        return this.validateEthereumAddress(address);
-      case 'BASE':
-        return this.validateBaseAddress(address);
-      default:
-        return false;
-    }
+  getSolanaConnection(): Connection {
+    return this.solanaConnection;
   }
 
-  async getAddressDetails(network: 'SOLANA' | 'ETHEREUM' | 'BASE', address: string) {
-    switch (network) {
-      case 'SOLANA':
-        return this.getSolanaAddressDetails(address);
-      case 'ETHEREUM':
-        return this.getEthereumAddressDetails(address);
-      case 'BASE':
-        return this.getBaseAddressDetails(address);
-      default:
-        throw new Error('Unsupported network');
-    }
+  getEthereumProvider(): JsonRpcProvider {
+    return this.ethereumProvider;
+  }
+
+  getBaseProvider(): JsonRpcProvider {
+    return this.baseProvider;
+  }
+
+  getSolanaEndpoint(): string {
+    return this.solanaConnection.rpcEndpoint;
   }
 }

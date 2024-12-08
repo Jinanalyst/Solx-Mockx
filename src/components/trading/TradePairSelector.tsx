@@ -38,18 +38,23 @@ const MarketImage = ({ src, alt }: { src?: string; alt: string }) => {
 interface TradePairSelectorProps {
   selectedPair: string | null;
   onPairSelect: (pair: string) => void;
+  showFullMarketData?: boolean;
 }
 
-export function TradePairSelector({ selectedPair, onPairSelect }: TradePairSelectorProps) {
+export function TradePairSelector({ 
+  selectedPair, 
+  onPairSelect,
+  showFullMarketData = false 
+}: TradePairSelectorProps) {
   const [open, setOpen] = useState(false);
   const [searchValue, setSearchValue] = useState('');
   const { marketData, marketPairs, isLoading } = useMarketData();
 
-  // Memoize number formatters to prevent unnecessary re-creation
+  // Memoize number formatters
   const formatters = useMemo(() => ({
     price: new Intl.NumberFormat('en-US', {
       minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
+      maximumFractionDigits: 6,
     }),
     volume: new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -62,7 +67,8 @@ export function TradePairSelector({ selectedPair, onPairSelect }: TradePairSelec
 
   const formatPrice = (price: number) => formatters.price.format(price);
   const formatVolume = (volume: number) => formatters.volume.format(volume);
-  const formatPriceChange = (change: number) => `${change >= 0 ? '+' : ''}${change.toFixed(2)}%`;
+  const formatPriceChange = (change: number | null) => 
+    change === null ? '0.00%' : `${change >= 0 ? '+' : ''}${change.toFixed(2)}%`;
 
   // Memoize selected market data
   const selectedMarketData = useMemo(() => {
@@ -78,6 +84,61 @@ export function TradePairSelector({ selectedPair, onPairSelect }: TradePairSelec
       market.name.toLowerCase().includes(searchValue.toLowerCase())
     );
   }, [marketData, searchValue]);
+
+  const renderMarketRow = (market: CoinInfo) => (
+    <div className="flex items-center justify-between w-full py-2 px-3 hover:bg-accent cursor-pointer"
+         onClick={() => onPairSelect(market.symbol)}>
+      <div className="flex items-center gap-3">
+        <MarketImage src={market.image} alt={market.name} />
+        <div className="flex flex-col">
+          <span className="font-medium">{market.symbol}</span>
+          <span className="text-sm text-muted-foreground">{market.name}</span>
+        </div>
+      </div>
+      <div className="flex flex-col items-end">
+        <span className="font-medium">{formatPrice(market.current_price)}</span>
+        <span className={cn(
+          "text-sm",
+          market.price_change_percentage_24h >= 0 ? "text-green-500" : "text-red-500"
+        )}>
+          {formatPriceChange(market.price_change_percentage_24h)}
+        </span>
+      </div>
+    </div>
+  );
+
+  if (showFullMarketData) {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="p-3 border-b">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search markets..."
+              value={searchValue}
+              onChange={(e) => setSearchValue(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+        </div>
+        <ScrollArea className="flex-1">
+          <div className="grid grid-cols-1 divide-y">
+            {isLoading ? (
+              <div className="p-8 text-center text-muted-foreground">Loading markets...</div>
+            ) : filteredMarkets.length === 0 ? (
+              <div className="p-8 text-center text-muted-foreground">No markets found</div>
+            ) : (
+              filteredMarkets.map((market) => (
+                <div key={market.symbol} className="hover:bg-accent/50">
+                  {renderMarketRow(market)}
+                </div>
+              ))
+            )}
+          </div>
+        </ScrollArea>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col">
@@ -100,53 +161,32 @@ export function TradePairSelector({ selectedPair, onPairSelect }: TradePairSelec
         </PopoverTrigger>
         <PopoverContent className="w-[280px] p-0">
           <Command>
-            <CommandInput
-              placeholder="Search market..."
+            <CommandInput 
+              placeholder="Search markets..." 
               value={searchValue}
               onValueChange={setSearchValue}
-              className="h-9"
             />
-            <CommandEmpty>No market found.</CommandEmpty>
+            <CommandEmpty>No markets found</CommandEmpty>
             <CommandGroup>
               <ScrollArea className="h-[300px]">
-                <div className="grid grid-cols-1 gap-1 p-1">
-                  {filteredMarkets.map(market => (
-                    <CommandItem
-                      key={market.id}
-                      value={market.symbol}
-                      onSelect={() => {
-                        onPairSelect(market.symbol);
-                        setOpen(false);
-                      }}
-                      className="px-2 py-3"
-                    >
-                      <div className="flex items-center justify-between w-full">
-                        <div className="flex items-center gap-2">
-                          <MarketImage src={market.image} alt={market.name} />
-                          <div>
-                            <div className="font-medium">{market.symbol}</div>
-                            <div className="text-xs text-muted-foreground">
-                              Vol: {formatVolume(market.total_volume)}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div>${formatPrice(market.current_price)}</div>
-                          <div
-                            className={cn(
-                              'text-xs',
-                              market.price_change_percentage_24h >= 0
-                                ? 'text-green-500'
-                                : 'text-red-500'
-                            )}
-                          >
-                            {formatPriceChange(market.price_change_percentage_24h)}
-                          </div>
-                        </div>
-                      </div>
-                    </CommandItem>
-                  ))}
-                </div>
+                {filteredMarkets.map((market) => (
+                  <CommandItem
+                    key={market.symbol}
+                    value={market.symbol}
+                    onSelect={() => {
+                      onPairSelect(market.symbol);
+                      setOpen(false);
+                    }}
+                  >
+                    {renderMarketRow(market)}
+                    <Check
+                      className={cn(
+                        "ml-auto h-4 w-4",
+                        selectedPair === market.symbol ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                  </CommandItem>
+                ))}
               </ScrollArea>
             </CommandGroup>
           </Command>

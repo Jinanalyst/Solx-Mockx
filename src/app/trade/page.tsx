@@ -1,120 +1,75 @@
 'use client';
 
 import { useState } from 'react';
-import { Card } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { TradingPairsTable } from '@/components/trading/TradingPairsTable';
-import { TradingInterface } from '@/components/trading/TradingInterface';
+import { TradingViewWidget } from '@/components/trading/TradingViewWidget';
 import { OrderBook } from '@/components/trading/OrderBook';
-import { OrderForm } from '@/components/trading/OrderForm';
+import { TradePanel } from '@/components/trading/TradePanel';
 import { RecentTrades } from '@/components/trading/RecentTrades';
-import { UserPositions } from '@/components/trading/UserPositions';
-import { TradingPanel } from '@/components/trading/TradingPanel';
-import { FuturesTrading } from '@/components/trading/FuturesTrading';
-import { PriceDisplay } from '@/components/trading/PriceDisplay';
-import { TradeHistory } from '@/components/trading/TradeHistory';
-import { useTradingContext } from '@/contexts/TradingContext';
-import { TRADING_PAIRS } from '@/config/trading';
-import type { TradingPair } from '@/types/trading';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useToast } from '@/components/ui/use-toast';
-import { handleError } from '@/utils/errorHandling';
-import { usePriceUpdates } from '@/hooks/usePriceUpdates';
 
 function TradeContent() {
-  const { toast } = useToast();
-  const [selectedPair, setSelectedPair] = useState<TradingPair>(TRADING_PAIRS[0]);
-  const { pairPrices: prices, error, isLoading } = usePriceUpdates(5000); // Update every 5 seconds
+  const [selectedTimeframe, setSelectedTimeframe] = useState('30m');
+  const timeframes = ['1s', '1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w', '1M'];
 
-  const handleTradingError = (error: unknown) => {
-    const handledError = handleError(error);
-    toast({
-      title: 'Trading Error',
-      description: handledError.message,
-      variant: 'destructive',
-    });
-  };
-
-  if (error) {
-    return (
-      <Alert variant="destructive">
-        <AlertDescription>
-          Failed to load trading data. Please try again later.
-        </AlertDescription>
-      </Alert>
-    );
-  }
+  // Mock data
+  const mockPrice = 100055.36;
+  const mockChange = 0.75;
+  const mockVolume = '1,812,156,156.15';
 
   return (
-    <div className="container mx-auto py-8">
-      <div className="grid grid-cols-12 gap-4">
-        <div className="col-span-12 lg:col-span-2">
-          <Card className="p-4">
-            <TradingPairsTable
-              pairs={[...TRADING_PAIRS]}
-              selectedPair={selectedPair}
-              onSelectPair={setSelectedPair}
-              pairPrices={prices}
-            />
-          </Card>
+    <div className="flex flex-col h-screen bg-[#0b0e11]">
+      {/* Top Navigation Bar */}
+      <div className="h-14 border-b border-gray-800 flex items-center px-4 justify-between">
+        <div className="flex items-center space-x-6">
+          {/* Trading Pair Info */}
+          <div className="flex items-center space-x-2">
+            <span className="text-xl font-semibold text-white">BTCUSDT</span>
+            <span className="text-[#02c076]">{mockPrice.toLocaleString()}</span>
+            <span className="text-[#02c076] text-sm">+{mockChange}%</span>
+          </div>
+          
+          {/* Timeframe Selector */}
+          <div className="flex space-x-1">
+            {timeframes.map((tf) => (
+              <button
+                key={tf}
+                onClick={() => setSelectedTimeframe(tf)}
+                className={`px-3 py-1 text-sm rounded ${
+                  selectedTimeframe === tf
+                    ? 'bg-gray-700 text-white'
+                    : 'text-gray-400 hover:bg-gray-800'
+                }`}
+              >
+                {tf}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="col-span-12 lg:col-span-7 space-y-4">
-          {prices[selectedPair.name] && (
-            <PriceDisplay
-              pair={selectedPair.name}
-              price={prices[selectedPair.name].price}
-              high24h={prices[selectedPair.name].high24h}
-              low24h={prices[selectedPair.name].low24h}
-              volume24h={prices[selectedPair.name].volume24h}
-              priceChange24h={prices[selectedPair.name].priceChange24h}
-              priceChangePercentage24h={prices[selectedPair.name].priceChangePercentage24h}
-            />
-          )}
+        {/* Right Section */}
+        <div className="flex items-center space-x-4">
+          <span className="text-gray-400">24h Volume: {mockVolume} USDT</span>
+        </div>
+      </div>
 
-          <Card className="p-4">
-            <TradingInterface
-              selectedPair={selectedPair}
-            />
-          </Card>
-
-          <Card className="p-4">
-            <Tabs defaultValue="spot">
-              <TabsList>
-                <TabsTrigger value="spot">Spot Trading</TabsTrigger>
-                <TabsTrigger value="futures">Futures Trading</TabsTrigger>
-              </TabsList>
-              <TabsContent value="spot">
-                <TradingPanel
-                  pair={selectedPair.name}
-                  currentPrice={prices[selectedPair.name]?.price || 0}
-                  onError={handleTradingError}
-                />
-              </TabsContent>
-              <TabsContent value="futures">
-                <FuturesTrading
-                  pair={selectedPair.name}
-                  currentPrice={prices[selectedPair.name]?.price || 0}
-                  onError={handleTradingError}
-                />
-              </TabsContent>
-            </Tabs>
-          </Card>
+      {/* Main Content */}
+      <div className="flex flex-1 min-h-0">
+        {/* Left Section - Chart and Order Book */}
+        <div className="flex flex-col flex-1 min-w-0 border-r border-gray-800">
+          {/* Chart */}
+          <div className="h-[65%] border-b border-gray-800">
+            <TradingViewWidget symbol="BTCUSDT" />
+          </div>
+          
+          {/* Bottom Section */}
+          <div className="flex flex-1 min-h-0">
+            <OrderBook className="flex-1 border-r border-gray-800" />
+            <RecentTrades className="flex-1" />
+          </div>
         </div>
 
-        <div className="col-span-12 lg:col-span-3 space-y-4">
-          <div className="h-[400px]">
-            <OrderBook
-              pair={selectedPair.name}
-              onError={handleTradingError}
-            />
-          </div>
-          <div className="h-[400px]">
-            <TradeHistory
-              pair={selectedPair.name}
-              onError={handleTradingError}
-            />
-          </div>
+        {/* Right Section - Trading Panel */}
+        <div className="w-[350px]">
+          <TradePanel />
         </div>
       </div>
     </div>

@@ -283,6 +283,16 @@ export class MockTradingService {
     };
   }
 
+  public getUserOrders(userId: string): MockOrder[] {
+    const user = this.users.get(userId);
+    return user?.orders || [];
+  }
+
+  public getUserTrades(userId: string): MockTrade[] {
+    const user = this.users.get(userId);
+    return user?.trades || [];
+  }
+
   public closePosition(userId: string, positionId: string): boolean {
     const user = this.users.get(userId);
     if (!user) return false;

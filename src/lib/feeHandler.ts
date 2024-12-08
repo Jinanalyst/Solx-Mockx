@@ -1,25 +1,45 @@
 import { FEE_CONFIG, calculateTradingFee, getMinimumFee, getFeeReceiver } from '../config/fees';
 import { NetworkManager } from './networks';
-import { ethers } from 'ethers';
+import { parseEther } from 'ethers';
 import { Connection, PublicKey, Transaction, SystemProgram } from '@solana/web3.js';
 
-export class FeeHandler {
-  private chain: keyof typeof FEE_CONFIG.MOCKX.RECEIVERS;
-  private networkManager: NetworkManager;
+export type Chain = 'SOLANA' | 'ETHEREUM' | 'BASE';
 
-  constructor(chain: keyof typeof FEE_CONFIG.MOCKX.RECEIVERS, network: 'MAINNET' | 'TESTNET' | 'DEVNET' = 'MAINNET') {
+export class FeeHandler {
+  private networkManager: NetworkManager;
+  private chain: Chain;
+
+  constructor(networkManager: NetworkManager, chain: Chain) {
+    this.networkManager = networkManager;
     this.chain = chain;
-    this.networkManager = new NetworkManager(network);
   }
 
   async validateFeeAddress(): Promise<boolean> {
     const address = getFeeReceiver(this.chain);
-    return this.networkManager.validateAddressForNetwork(this.chain, address);
+    switch (this.chain) {
+      case 'SOLANA':
+        return this.networkManager.validateSolanaAddress(address);
+      case 'ETHEREUM':
+        return this.networkManager.validateEthereumAddress(address);
+      case 'BASE':
+        return this.networkManager.validateBaseAddress(address);
+      default:
+        return false;
+    }
   }
 
   async getFeeAddressDetails() {
     const address = getFeeReceiver(this.chain);
-    return this.networkManager.getAddressDetails(this.chain, address);
+    switch (this.chain) {
+      case 'SOLANA':
+        return this.networkManager.getSolanaAddressDetails(address);
+      case 'ETHEREUM':
+        return this.networkManager.getEthereumAddressDetails(address);
+      case 'BASE':
+        return this.networkManager.getBaseAddressDetails(address);
+      default:
+        throw new Error('Unsupported chain');
+    }
   }
 
   calculateFee(tradeAmount: number): {
@@ -80,7 +100,7 @@ export class FeeHandler {
           
           const tx = {
             to: receiverAddress,
-            value: ethers.utils.parseEther(amount.toString())
+            value: parseEther(amount.toString())
           };
           
           const transaction = await senderWallet.sendTransaction(tx);

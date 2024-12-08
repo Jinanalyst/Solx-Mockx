@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { BIRDEYE_API_KEY } from '../config/api';
+import { API_CONFIG } from '../config/api';
 import okxClient from './okx';
 
 export interface TokenData {
@@ -33,7 +33,7 @@ const axiosInstance = axios.create({
   headers: {
     'Accept': 'application/json',
     'Content-Type': 'application/json',
-    'X-API-KEY': BIRDEYE_API_KEY
+    'X-API-KEY': API_CONFIG.BIRDEYE_API_KEY
   }
 });
 

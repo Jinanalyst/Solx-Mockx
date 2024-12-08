@@ -10,6 +10,7 @@ import { WalletProvider } from '@/contexts/WalletContext';
 import { TransactionProvider } from '@/contexts/TransactionContext';
 import { TradingProvider } from '@/contexts/TradingContext';
 import { MarketDataProvider } from '@/contexts/MarketDataContext';
+import { MockTradingProvider } from '@/contexts/MockTradingContext';
 
 require('@solana/wallet-adapter-react-ui/styles.css');
 
@@ -25,7 +26,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
               <TransactionProvider>
                 <MarketDataProvider>
                   <TradingProvider>
-                    {children}
+                    <MockTradingProvider>
+                      {children}
+                    </MockTradingProvider>
                   </TradingProvider>
                 </MarketDataProvider>
               </TransactionProvider>

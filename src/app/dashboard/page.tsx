@@ -20,7 +20,7 @@ function PortfolioOverview() {
   const { balances } = useMockTrading();
   const { userStakes } = useStaking();
   
-  const totalBalance = balances.reduce((sum: number, balance: MockBalance) => sum + balance.balance, 0);
+  const totalBalance = balances.reduce((sum: number, balance: MockBalance) => sum + balance.free + balance.locked, 0);
   const totalStaked = userStakes.reduce((sum, stake) => sum + parseFloat(stake.stakedAmount.toString()), 0);
 
   return (

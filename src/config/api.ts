@@ -37,6 +37,7 @@ export const API_CONFIG = {
   JUPITER_API_URL: 'https://price.jup.ag/v4',
   SERUM_RPC_ENDPOINT: 'https://api.mainnet-beta.solana.com',
   RAYDIUM_API_URL: 'https://api.raydium.io/v2',
+  BIRDEYE_API_KEY: process.env.NEXT_PUBLIC_BIRDEYE_API_KEY || 'your-api-key-here'
 };
 
 export const JUPITER_ENDPOINTS = {

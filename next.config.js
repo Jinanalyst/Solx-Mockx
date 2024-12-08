@@ -48,13 +48,12 @@ const nextConfig = {
             key: 'Access-Control-Allow-Methods',
             value: 'GET, POST, PUT, DELETE, OPTIONS',
           },
-          {
-            key: 'Access-Control-Allow-Headers',
-            value: 'X-Requested-With, Content-Type, Authorization',
-          },
         ],
       },
     ];
+  },
+  compiler: {
+    styledComponents: true,
   },
   webpack: (config, { isServer }) => {
     if (!isServer) {
@@ -65,14 +64,14 @@ const nextConfig = {
         tls: false,
         crypto: require.resolve('crypto-browserify'),
         stream: require.resolve('stream-browserify'),
-        url: false,
+        url: require.resolve('url'),
         zlib: require.resolve('browserify-zlib'),
         http: require.resolve('stream-http'),
         https: require.resolve('https-browserify'),
         assert: require.resolve('assert'),
-        os: require.resolve('os-browserify/browser'),
+        os: require.resolve('os-browserify'),
         path: require.resolve('path-browserify'),
-        buffer: require.resolve('buffer'),
+        process: require.resolve('process/browser'),
       };
 
       config.plugins.push(
@@ -81,8 +80,25 @@ const nextConfig = {
           process: 'process/browser',
         })
       );
-    }
 
+      // Add process polyfill
+      config.module = {
+        ...config.module,
+        rules: [
+          ...config.module.rules,
+          {
+            test: /node_modules[\/\\]process[\/\\]browser\.js/,
+            use: {
+              loader: 'babel-loader',
+              options: {
+                presets: ['@babel/preset-env'],
+                plugins: ['@babel/plugin-transform-modules-commonjs'],
+              },
+            },
+          },
+        ],
+      };
+    }
     return config;
   },
   transpilePackages: [
@@ -92,10 +108,7 @@ const nextConfig = {
     '@solana/wallet-adapter-react-ui',
     '@solana/wallet-adapter-phantom',
     '@solana/wallet-adapter-solflare',
-    '@solana/spl-token',
-    '@project-serum/serum',
-    '@raydium-io/raydium-sdk',
   ],
-}
+};
 
-module.exports = nextConfig
+module.exports = nextConfig;

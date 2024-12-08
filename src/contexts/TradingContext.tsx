@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useWallet } from '@solana/wallet-adapter-react';
+import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { PublicKey } from '@solana/web3.js';
 
 export type OrderType = 'MARKET' | 'LIMIT' | 'STOP_LIMIT' | 'OCO';
@@ -88,7 +88,8 @@ interface TradingContextType {
 const TradingContext = createContext<TradingContextType | null>(null);
 
 export function TradingProvider({ children }: { children: ReactNode }) {
-  const { publicKey, connection } = useWallet();
+  const { publicKey } = useWallet();
+  const { connection } = useConnection();
   const [orders, setOrders] = useState<Order[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
   const [markPrice, setMarkPrice] = useState<{ [market: string]: number }>({});

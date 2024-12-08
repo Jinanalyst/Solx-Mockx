@@ -1,6 +1,7 @@
 import { CoinInfo, MarketPair, TokenPrice } from '@/types/market';
 import axios, { AxiosError } from 'axios';
 import { mockMarketData } from '@/mocks/marketData';
+import { logger } from './loggingService';
 
 export class MarketDataService {
   private static instance: MarketDataService;
@@ -10,6 +11,7 @@ export class MarketDataService {
   private retryDelay = 5000; // 5 seconds
   private maxRetries = 3;
   private useMockData = false;
+  private rateLimitResetTime: number | null = null;
 
   private marketData: Map<string, CoinInfo> = new Map();
   private marketPairs: Map<string, MarketPair[]> = new Map();
@@ -17,6 +19,8 @@ export class MarketDataService {
   private lastUpdate: number = 0;
   private subscribers: Set<() => void> = new Set();
   private updateTimeout: NodeJS.Timeout | null = null;
+  private cachedResponses: Map<string, { data: any; timestamp: number }> = new Map();
+  private cacheExpiry = 5 * 60 * 1000; // 5 minutes
 
   private constructor() {
     this.startPolling();
@@ -31,13 +35,31 @@ export class MarketDataService {
 
   private async fetchWithRetry<T>(
     url: string,
-    options: { retries?: number; delay?: number } = {}
+    options: { retries?: number; delay?: number; useCache?: boolean } = {}
   ): Promise<T> {
-    const { retries = this.maxRetries, delay = this.retryDelay } = options;
+    const { retries = this.maxRetries, delay = this.retryDelay, useCache = true } = options;
     let lastError: Error | null = null;
+
+    // Check cache first if enabled
+    if (useCache) {
+      const cached = this.cachedResponses.get(url);
+      if (cached && Date.now() - cached.timestamp < this.cacheExpiry) {
+        logger.debug('Using cached response', { url });
+        return cached.data as T;
+      }
+    }
+
+    // Check rate limit
+    if (this.rateLimitResetTime && Date.now() < this.rateLimitResetTime) {
+      logger.warn('Rate limit in effect, using mock data', {
+        resetTime: new Date(this.rateLimitResetTime).toISOString(),
+      });
+      return this.getMockData() as T;
+    }
 
     for (let i = 0; i < retries; i++) {
       try {
+        logger.debug(`API request attempt ${i + 1}/${retries}`, { url });
         const response = await axios.get<T>(url, {
           headers: {
             'Accept': 'application/json',
@@ -46,20 +68,48 @@ export class MarketDataService {
           timeout: 10000, // 10 seconds
         });
 
-        // Reset mock data flag on successful API call
+        // Cache the successful response
+        if (useCache) {
+          this.cachedResponses.set(url, {
+            data: response.data,
+            timestamp: Date.now(),
+          });
+        }
+
+        // Reset mock data flag and rate limit on successful API call
         this.useMockData = false;
+        this.rateLimitResetTime = null;
+        
+        logger.info('API request successful', {
+          url,
+          status: response.status,
+          dataSize: JSON.stringify(response.data).length,
+        });
+
         return response.data;
       } catch (error) {
         lastError = error as Error;
         const axiosError = error as AxiosError;
         
         if (axiosError.response?.status === 429) {
-          console.warn('Rate limit hit, switching to mock data');
+          const resetTime = axiosError.response.headers['x-ratelimit-reset'];
+          this.rateLimitResetTime = resetTime 
+            ? parseInt(resetTime) * 1000 
+            : Date.now() + 60000; // Default to 1 minute if no reset time provided
+
+          logger.warn('Rate limit hit, switching to mock data', {
+            resetTime: new Date(this.rateLimitResetTime).toISOString(),
+          });
           this.useMockData = true;
           return this.getMockData() as T;
         }
 
-        console.warn(`Attempt ${i + 1}/${retries} failed:`, error);
+        logger.error(`API request failed (attempt ${i + 1}/${retries})`, {
+          url,
+          status: axiosError.response?.status,
+          statusText: axiosError.response?.statusText,
+        }, error);
+
         if (i < retries - 1) {
           await new Promise(resolve => setTimeout(resolve, delay));
         }
@@ -67,6 +117,7 @@ export class MarketDataService {
     }
 
     if (this.useMockData) {
+      logger.info('Falling back to mock data after all retries failed');
       return this.getMockData() as T;
     }
 
@@ -74,6 +125,7 @@ export class MarketDataService {
   }
 
   private getMockData(): CoinInfo[] {
+    logger.debug('Using mock market data');
     return Object.values(mockMarketData);
   }
 
@@ -84,6 +136,7 @@ export class MarketDataService {
         return;
       }
 
+      logger.info('Updating market data');
       const data = await this.fetchWithRetry<CoinInfo[]>(
         `${this.baseUrl}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&sparkline=false`
       );
@@ -95,8 +148,15 @@ export class MarketDataService {
 
       this.lastUpdate = now;
       this.notifySubscribers();
+      logger.info('Market data updated successfully', {
+        coinsCount: data.length,
+        timestamp: new Date().toISOString(),
+      });
     } catch (error) {
-      console.error('Failed to update market data:', error);
+      logger.error('Failed to update market data', {
+        lastUpdateTime: new Date(this.lastUpdate).toISOString(),
+      }, error as Error);
+
       if (!this.useMockData) {
         this.useMockData = true;
         const mockData = this.getMockData();
@@ -142,6 +202,8 @@ export class MarketDataService {
 
   public async getTokenPrice(tokenId: string): Promise<TokenPrice | null> {
     try {
+      logger.debug('Fetching token price', { tokenId });
+
       if (this.useMockData) {
         const mockPrice = (mockMarketData as any)[tokenId];
         return mockPrice ? { usd: mockPrice.usd } : null;
@@ -150,34 +212,60 @@ export class MarketDataService {
       const data = await this.fetchWithRetry<any>(
         `${this.baseUrl}/simple/price?ids=${tokenId}&vs_currencies=usd`
       );
-      return data[tokenId] || null;
+
+      const price = data[tokenId];
+      if (price) {
+        logger.info('Token price fetched successfully', {
+          tokenId,
+          price: price.usd,
+        });
+      } else {
+        logger.warn('Token price not found', { tokenId });
+      }
+
+      return price || null;
     } catch (error) {
-      console.error('Failed to get token price:', error);
+      logger.error('Failed to get token price', { tokenId }, error as Error);
       return null;
     }
   }
 
   public async searchCoins(query: string): Promise<CoinInfo[]> {
-    if (this.useMockData) {
-      return Object.entries(mockMarketData)
-        .filter(([id]) => id.includes(query.toLowerCase()))
-        .map(([id, data]) => ({
-          id,
-          symbol: id,
-          name: id.charAt(0).toUpperCase() + id.slice(1),
-          current_price: data.usd,
-          price_change_24h: data.usd_24h_change,
-          market_cap: data.market_cap,
-        } as CoinInfo));
-    }
-
     try {
+      logger.debug('Searching coins', { query });
+
+      if (this.useMockData) {
+        const results = Object.entries(mockMarketData)
+          .filter(([id]) => id.includes(query.toLowerCase()))
+          .map(([id, data]) => ({
+            id,
+            symbol: id,
+            name: id.charAt(0).toUpperCase() + id.slice(1),
+            current_price: data.usd,
+            price_change_24h: data.usd_24h_change,
+            market_cap: data.market_cap,
+          } as CoinInfo));
+
+        logger.info('Coin search completed (mock)', {
+          query,
+          resultsCount: results.length,
+        });
+
+        return results;
+      }
+
       const data = await this.fetchWithRetry<any>(
         `${this.baseUrl}/search?query=${query}`
       );
+
+      logger.info('Coin search completed', {
+        query,
+        resultsCount: data.coins?.length || 0,
+      });
+
       return data.coins || [];
     } catch (error) {
-      console.error('Failed to search coins:', error);
+      logger.error('Failed to search coins', { query }, error as Error);
       return [];
     }
   }
@@ -185,26 +273,21 @@ export class MarketDataService {
   public getTopMarketPairs(limit: number = 10): MarketPair[] {
     const allPairs = Array.from(this.marketPairs.values()).flat();
     return allPairs
-      .sort((a, b) => b.volume24h - a.volume24h)
+      .sort((a, b) => b.volume - a.volume)
       .slice(0, limit);
   }
 
   public async getHistoricalPrices(coinId: string, days: number = 7): Promise<any> {
     try {
+      logger.debug('Fetching historical prices', { coinId, days });
+
       if (this.useMockData) {
-        // Return mock historical data
-        const mockHistoricalData = [];
-        const now = Date.now();
-        const interval = (days * 24 * 60 * 60 * 1000) / 100; // 100 data points
-        
-        for (let i = 0; i < 100; i++) {
-          const timestamp = now - (99 - i) * interval;
-          const price = mockMarketData[coinId]?.current_price * (0.9 + Math.random() * 0.2);
-          if (price) {
-            mockHistoricalData.push([timestamp, price]);
-          }
-        }
-        
+        const mockHistoricalData = this.generateMockHistoricalData(days);
+        logger.info('Using mock historical data', {
+          coinId,
+          days,
+          dataPoints: mockHistoricalData.length,
+        });
         return mockHistoricalData;
       }
 
@@ -212,10 +295,36 @@ export class MarketDataService {
         `${this.baseUrl}/coins/${coinId}/market_chart?vs_currency=usd&days=${days}`
       );
 
-      return data.prices;
+      logger.info('Historical prices fetched successfully', {
+        coinId,
+        days,
+        dataPoints: data.prices?.length || 0,
+      });
+
+      return data;
     } catch (error) {
-      console.error('Failed to get historical prices:', error);
-      return null;
+      logger.error('Failed to fetch historical prices', { coinId, days }, error as Error);
+      return this.generateMockHistoricalData(days);
     }
+  }
+
+  private generateMockHistoricalData(days: number) {
+    const mockData = [];
+    const now = Date.now();
+    const interval = (days * 24 * 60 * 60 * 1000) / 100; // 100 data points
+    const basePrice = 100;
+    
+    for (let i = 0; i < 100; i++) {
+      const timestamp = now - (99 - i) * interval;
+      const randomChange = (Math.random() - 0.5) * 5;
+      const price = basePrice + randomChange;
+      mockData.push([timestamp, price]);
+    }
+
+    return {
+      prices: mockData,
+      market_caps: mockData.map(([time, price]) => [time, price * 1000000]),
+      total_volumes: mockData.map(([time, price]) => [time, price * 100000]),
+    };
   }
 }
