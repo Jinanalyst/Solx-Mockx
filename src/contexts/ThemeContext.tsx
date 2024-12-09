@@ -16,23 +16,42 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [mounted, setMounted] = useState(false);
-  const [themeMode, setThemeMode] = useState<ThemeMode>('dark'); // Default to dark theme for SSR
+  const [themeMode, setThemeMode] = useState<ThemeMode>('dark');
 
+  // Handle initial theme setup
   useEffect(() => {
+    const root = window.document.documentElement;
+    const initialColorValue = root.style.getPropertyValue('--initial-color-mode');
+    
     setMounted(true);
     const savedTheme = localStorage.getItem('theme') as ThemeMode;
+    
     if (savedTheme) {
       setThemeMode(savedTheme);
+      root.setAttribute('data-theme', savedTheme);
     } else {
       const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      setThemeMode(prefersDark ? 'dark' : 'light');
+      const initialTheme = prefersDark ? 'dark' : 'light';
+      setThemeMode(initialTheme);
+      root.setAttribute('data-theme', initialTheme);
     }
   }, []);
 
   useEffect(() => {
     if (mounted) {
+      const root = window.document.documentElement;
+      
+      // Remove existing theme classes
+      root.classList.remove('light', 'dark');
+      
+      // Add new theme class
+      root.classList.add(themeMode);
+      
+      // Set theme attribute
+      root.setAttribute('data-theme', themeMode);
+      
+      // Store theme preference
       localStorage.setItem('theme', themeMode);
-      document.documentElement.setAttribute('data-theme', themeMode);
     }
   }, [themeMode, mounted]);
 
@@ -44,7 +63,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Prevent hydration mismatch by not rendering until mounted
   if (!mounted) {
-    return <>{children}</>;
+    return null;
   }
 
   return (

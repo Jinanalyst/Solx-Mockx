@@ -1,67 +1,117 @@
 'use client';
 
-import { useEffect, useRef, memo } from 'react';
+import { useEffect, useRef, memo, useState } from 'react';
+import { useTheme } from 'next-themes';
+import { binanceService } from '@/services/binance';
 
-let tvScriptLoadingPromise: Promise<void>;
+declare global {
+  interface Window {
+    TradingView: any;
+  }
+}
 
 interface TradingViewWidgetProps {
   symbol?: string;
 }
 
 export const TradingViewWidget = memo(({ symbol = 'BTCUSDT' }: TradingViewWidgetProps) => {
-  const onLoadScriptRef = useRef<(() => void) | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const { theme } = useTheme();
+  const [currentPrice, setCurrentPrice] = useState<number | null>(null);
 
   useEffect(() => {
-    onLoadScriptRef.current = createWidget;
+    // Get initial price
+    binanceService.getCurrentPrice().then(setCurrentPrice).catch(console.error);
 
-    if (!tvScriptLoadingPromise) {
-      tvScriptLoadingPromise = new Promise((resolve) => {
-        const script = document.createElement('script');
-        script.id = 'tradingview-widget-loading-script';
-        script.src = 'https://s3.tradingview.com/tv.js';
-        script.type = 'text/javascript';
-        script.onload = resolve as () => void;
-        document.head.appendChild(script);
-      });
-    }
-
-    tvScriptLoadingPromise.then(
-      () => onLoadScriptRef.current && onLoadScriptRef.current()
-    );
-
+    // Subscribe to real-time price updates
+    const priceCallback = (price: number) => {
+      setCurrentPrice(price);
+    };
+    
+    binanceService.subscribeToPriceUpdates('btcusdt', priceCallback);
+    
     return () => {
-      onLoadScriptRef.current = null;
+      binanceService.unsubscribeFromPriceUpdates('btcusdt', priceCallback);
+    };
+  }, []);
+
+  useEffect(() => {
+    const loadTradingViewScript = async () => {
+      if (typeof window.TradingView !== 'undefined') {
+        createWidget();
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = 'https://s3.tradingview.com/tv.js';
+      script.async = true;
+      script.onload = createWidget;
+      document.head.appendChild(script);
+
+      return () => {
+        if (script.parentNode) {
+          script.parentNode.removeChild(script);
+        }
+      };
     };
 
-    function createWidget() {
-      if (
-        document.getElementById('tradingview_widget') &&
-        'TradingView' in window
-      ) {
-        new (window as any).TradingView.widget({
-          autosize: true,
-          symbol: `BINANCE:${symbol}`,
-          interval: '1D',
-          timezone: 'Etc/UTC',
-          theme: 'dark',
-          style: '1',
-          locale: 'en',
-          enable_publishing: false,
-          allow_symbol_change: true,
-          container_id: 'tradingview_widget',
-        });
-      }
-    }
-  }, [symbol]);
+    loadTradingViewScript();
+  }, [theme]);
+
+  function createWidget() {
+    if (!containerRef.current || typeof window.TradingView === 'undefined') return;
+
+    // Clean up any existing widgets
+    containerRef.current.innerHTML = '';
+
+    const widget = new window.TradingView.widget({
+      container: containerRef.current,
+      symbol: 'BINANCE:BTCUSDT',
+      interval: '1',
+      timezone: 'Etc/UTC',
+      theme: theme === 'dark' ? 'dark' : 'light',
+      style: '1',
+      locale: 'en',
+      toolbar_bg: theme === 'dark' ? '#1a1b1e' : '#f8f9fa',
+      enable_publishing: false,
+      allow_symbol_change: false,
+      save_image: false,
+      studies: ['MASimple@tv-basicstudies', 'RSI@tv-basicstudies'],
+      width: '100%',
+      height: '100%',
+      hide_side_toolbar: false,
+      hide_legend: false,
+      withdateranges: true,
+      details: true,
+      hotlist: true,
+      calendar: true,
+      show_popup_button: true,
+      popup_width: '1000',
+      popup_height: '650',
+      disabled_features: [
+        'header_symbol_search',
+        'symbol_search_hot_key',
+        'header_compare'
+      ],
+      enabled_features: ['hide_left_toolbar_by_default']
+    });
+  }
 
   return (
-    <div className='tradingview-widget-container' style={{ height: '100%', width: '100%' }}>
-      <div id='tradingview_widget' style={{ height: 'calc(100% - 32px)', width: '100%' }} />
-      <div className="tradingview-widget-copyright">
-        <a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank">
-          <span className="blue-text">Track all markets on TradingView</span>
-        </a>
-      </div>
+    <div className="w-full h-full min-h-[500px] relative">
+      {currentPrice && (
+        <div className="absolute top-4 right-4 bg-black/80 text-white px-4 py-2 rounded-lg z-10">
+          BTCUSDT: ${currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        </div>
+      )}
+      <div
+        ref={containerRef}
+        className="w-full h-full"
+      />
     </div>
   );
 });
+
+TradingViewWidget.displayName = 'TradingViewWidget';
+
+export default TradingViewWidget;

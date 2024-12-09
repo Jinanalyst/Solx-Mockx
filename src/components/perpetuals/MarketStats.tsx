@@ -18,16 +18,16 @@ export function MarketStats() {
 
   const formatUSD = (value: BN | null): string => {
     if (!value) return '$-.--';
-    return `$${(value.toNumber() / 1e6).toFixed(2)}`;
+    return `$${(value.toNumber() / 1e6).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   const formatPercentage = (value: number): string => {
-    return `${(value * 100).toFixed(2)}%`;
+    return `${(value * 100).toFixed(4)}%`;
   };
 
   const calculatePriceChange = (): { change: number; isPositive: boolean } => {
     // This should be implemented with actual 24h price data
-    return { change: 0.05, isPositive: true };
+    return { change: 0.0075, isPositive: true };
   };
 
   const priceChange = calculatePriceChange();
@@ -51,7 +51,7 @@ export function MarketStats() {
         <Stat>
           <StatLabel>Funding Rate (8h)</StatLabel>
           <StatNumber>
-            {fundingRate ? formatPercentage(fundingRate.toNumber()) : '-.--%'}
+            {fundingRate ? formatPercentage(fundingRate.toNumber() / 1e6) : '-.---%'}
           </StatNumber>
           <StatHelpText>
             Next funding in: {/* Add countdown timer */}

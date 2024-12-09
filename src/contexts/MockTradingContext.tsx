@@ -15,9 +15,8 @@ import {
 } from '@/types/mockTrading';
 
 const initialBalances: MockBalance[] = [
-  { asset: 'SOLX', symbol: 'SOLX', free: 1000, locked: 0 },
-  { asset: 'MOCKX', symbol: 'MOCKX', free: 5000, locked: 0 },
-  { asset: 'USDC', symbol: 'USDC', free: 10000, locked: 0 },
+  { asset: 'BTC', symbol: 'BTC', free: 1, locked: 0 },
+  { asset: 'USDT', symbol: 'USDT', free: 100000, locked: 0 },
 ];
 
 export interface MockTradingContextType {
@@ -28,6 +27,7 @@ export interface MockTradingContextType {
   orderBook: OrderBook | undefined;
   performance: MockUser['performance'];
   selectedMarket: string;
+  currentPrice: number;
   placeOrder: (
     pair: string,
     side: OrderSide,
@@ -50,7 +50,8 @@ export function MockTradingProvider({ children }: { children: ReactNode }) {
   const [orders, setOrders] = useState<MockOrder[]>([]);
   const [trades, setTrades] = useState<MockTrade[]>([]);
   const [orderBook, setOrderBook] = useState<OrderBook>();
-  const [selectedMarket, setSelectedMarket] = useState<string>('SOL/USDC');
+  const [selectedMarket] = useState<string>('BTCUSDT');
+  const [currentPrice, setCurrentPrice] = useState<number>(0);
   const [performance, setPerformance] = useState<MockUser['performance']>({
     totalPnL: 0,
     winRate: 0,
@@ -60,6 +61,23 @@ export function MockTradingProvider({ children }: { children: ReactNode }) {
   });
 
   const mockTradingService = MockTradingService.getInstance();
+
+  // Update price every second
+  useEffect(() => {
+    const fetchPrice = async () => {
+      try {
+        const response = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT');
+        const data = await response.json();
+        setCurrentPrice(parseFloat(data.price));
+      } catch (error) {
+        console.error('Error fetching price:', error);
+      }
+    };
+
+    fetchPrice();
+    const interval = setInterval(fetchPrice, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   const refreshData = useCallback(() => {
     try {
@@ -74,6 +92,12 @@ export function MockTradingProvider({ children }: { children: ReactNode }) {
     }
   }, [userId, selectedMarket]);
 
+  useEffect(() => {
+    refreshData();
+    const interval = setInterval(refreshData, 5000);
+    return () => clearInterval(interval);
+  }, [refreshData]);
+
   const placeOrder = useCallback(async (
     pair: string,
     side: OrderSide,
@@ -82,70 +106,51 @@ export function MockTradingProvider({ children }: { children: ReactNode }) {
     price: number,
     leverage?: number
   ): Promise<MockOrder> => {
-    try {
-      const order = await mockTradingService.placeOrder(
-        userId,
-        pair,
-        side,
-        type,
-        amount,
-        price,
-        leverage
-      );
-      refreshData();
-      return order;
-    } catch (error) {
-      console.error('Error placing order:', error);
-      throw error;
-    }
-  }, [userId, refreshData]);
-
-  const closePosition = useCallback(async (positionId: string): Promise<void> => {
-    try {
-      await mockTradingService.closePosition(userId, positionId);
-      refreshData();
-    } catch (error) {
-      console.error('Error closing position:', error);
-      throw error;
-    }
-  }, [userId, refreshData]);
-
-  const updateBalance = useCallback((symbol: string, amount: number, type: 'add' | 'subtract', balanceType: 'free' | 'locked') => {
-    setBalances(prevBalances => {
-      return prevBalances.map(balance => {
-        if (balance.symbol === symbol) {
-          const currentAmount = balance[balanceType];
-          const newAmount = type === 'add' ? currentAmount + amount : currentAmount - amount;
-          return {
-            ...balance,
-            [balanceType]: Math.max(0, newAmount)
-          };
-        }
-        return balance;
-      });
-    });
-  }, []);
-
-  useEffect(() => {
+    const order = await mockTradingService.placeOrder(
+      userId,
+      pair,
+      side,
+      type,
+      amount,
+      price,
+      leverage
+    );
     refreshData();
-    const interval = setInterval(refreshData, 5000);
-    return () => clearInterval(interval);
-  }, [refreshData]);
+    return order;
+  }, [userId, refreshData]);
+
+  const closePosition = useCallback(async (positionId: string) => {
+    await mockTradingService.closePosition(userId, positionId);
+    refreshData();
+  }, [userId, refreshData]);
+
+  const updateBalance = useCallback((
+    symbol: string,
+    amount: number,
+    type: 'add' | 'subtract',
+    balanceType: 'free' | 'locked'
+  ) => {
+    mockTradingService.updateBalance(userId, symbol, amount, type, balanceType);
+    refreshData();
+  }, [userId, refreshData]);
+
+  const value = {
+    positions,
+    balances,
+    orders,
+    trades,
+    orderBook,
+    performance,
+    selectedMarket,
+    currentPrice,
+    placeOrder,
+    closePosition,
+    refreshData,
+    updateBalance,
+  };
 
   return (
-    <MockTradingContext.Provider value={{
-      positions,
-      balances,
-      orders,
-      trades,
-      orderBook,
-      performance,
-      selectedMarket,
-      placeOrder,
-      closePosition,
-      refreshData,
-      updateBalance,
-    }}>
+    <MockTradingContext.Provider value={value}>
       {children}
     </MockTradingContext.Provider>
   );

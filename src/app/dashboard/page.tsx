@@ -23,11 +23,15 @@ function PortfolioOverview() {
   const { balances } = useMockTrading();
   const { userSolxStake, userMockxStake } = useStaking();
 
-  const totalBalance = balances.reduce((sum: number, balance: MockBalance) => sum + balance.free + balance.locked, 0);
+  const totalBalance = balances.reduce((sum: number, balance: MockBalance) => {
+    const free = balance.free instanceof BN ? Number(balance.free.toString()) / 1e6 : balance.free;
+    const locked = balance.locked instanceof BN ? Number(balance.locked.toString()) / 1e6 : balance.locked;
+    return sum + free + locked;
+  }, 0);
   
   // Convert BN to number for display
-  const solxStaked = userSolxStake?.stakedAmount ? Number(userSolxStake.stakedAmount.toString()) / 1e9 : 0;
-  const mockxStaked = userMockxStake?.stakedAmount ? Number(userMockxStake.stakedAmount.toString()) / 1e9 : 0;
+  const solxStaked = userSolxStake?.stakedAmount ? Number(userSolxStake.stakedAmount.toString()) / 1e6 : 0;
+  const mockxStaked = userMockxStake?.stakedAmount ? Number(userMockxStake.stakedAmount.toString()) / 1e6 : 0;
   const totalStaked = solxStaked + mockxStaked;
 
   const portfolioCards: PortfolioCardProps[] = [
@@ -50,29 +54,27 @@ function PortfolioOverview() {
       percentChange: -1.5,
     },
     {
-      title: 'Total Earnings',
-      value: '$987.65',
+      title: 'Total PnL',
+      value: '+$1,234.56',
       icon: <MdTrendingUp className="w-6 h-6" />,
-      percentChange: 8.4,
+      percentChange: 8.3,
     },
   ];
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
       {portfolioCards.map((card, index) => (
-        <Card key={index} className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-2 bg-primary/10 rounded-lg">
-              {card.icon}
-            </div>
-            {card.percentChange && (
-              <span className={`text-sm ${card.percentChange > 0 ? 'text-green-500' : 'text-red-500'}`}>
-                {card.percentChange > 0 ? '+' : ''}{card.percentChange}%
-              </span>
-            )}
+        <Card key={index} className="p-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm text-gray-500">{card.title}</span>
+            {card.icon}
           </div>
-          <h3 className="text-sm font-medium text-muted-foreground">{card.title}</h3>
-          <p className="text-2xl font-bold">{card.value}</p>
+          <div className="text-2xl font-semibold mb-2">{card.value}</div>
+          {card.percentChange && (
+            <div className={`text-sm ${card.percentChange > 0 ? 'text-green-500' : 'text-red-500'}`}>
+              {card.percentChange > 0 ? '+' : ''}{card.percentChange}%
+            </div>
+          )}
         </Card>
       ))}
     </div>
@@ -80,27 +82,25 @@ function PortfolioOverview() {
 }
 
 function PortfolioDistribution() {
-  const { balances } = useMockTrading();
-  const totalValue = balances.reduce((sum, balance) => sum + balance.free + balance.locked, 0);
+  const assets = [
+    { name: 'SOLX', value: 45, color: 'bg-blue-500' },
+    { name: 'MOCKX', value: 30, color: 'bg-purple-500' },
+    { name: 'USDT', value: 25, color: 'bg-green-500' },
+  ];
 
   return (
     <Card className="p-6">
       <h3 className="text-lg font-semibold mb-4">Portfolio Distribution</h3>
       <div className="space-y-4">
-        {balances.map((balance, index) => {
-          const percentage = ((balance.free + balance.locked) / totalValue) * 100;
-          return (
-            <div key={index}>
-              <div className="flex justify-between mb-1">
-                <span className="text-sm font-medium">{balance.asset}</span>
-                <span className="text-sm text-muted-foreground">
-                  ${formatNumber(balance.free + balance.locked)} ({percentage.toFixed(1)}%)
-                </span>
-              </div>
-              <Progress value={percentage} className="h-2" />
+        {assets.map((asset) => (
+          <div key={asset.name}>
+            <div className="flex justify-between mb-1">
+              <span>{asset.name}</span>
+              <span>{asset.value}%</span>
             </div>
-          );
-        })}
+            <Progress value={asset.value} className={asset.color} />
+          </div>
+        ))}
       </div>
     </Card>
   );
@@ -108,24 +108,14 @@ function PortfolioDistribution() {
 
 export default function DashboardPage() {
   return (
-    <div className="container py-8 space-y-8">
-      <div>
-        <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
-        <p className="text-muted-foreground">
-          Overview of your portfolio, trading activity, and staking rewards.
-        </p>
-      </div>
-      
-      <PortfolioOverview />
-      
-      <div className="grid gap-4 md:grid-cols-2">
-        <PortfolioDistribution />
-        <Card className="p-6">
-          <h3 className="text-lg font-semibold mb-4">Recent Activity</h3>
-          <div className="text-muted-foreground text-center py-8">
-            No recent activity to display
-          </div>
-        </Card>
+    <div className="container mx-auto px-4 py-8">
+      <h1 className="text-3xl font-bold mb-8">Dashboard</h1>
+      <div className="space-y-8">
+        <PortfolioOverview />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <PortfolioDistribution />
+          {/* Add more dashboard components here */}
+        </div>
       </div>
     </div>
   );

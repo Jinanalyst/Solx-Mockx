@@ -1,4 +1,4 @@
-import { API_CONFIG, BINANCE_ENDPOINTS } from '../config/api';
+import { API_CONFIG } from '../config/api';
 
 export interface KlineData {
   openTime: number;
@@ -21,107 +21,118 @@ export interface OrderBookData {
 }
 
 class BinanceService {
-  private baseUrl: string;
-  private wsUrl: string;
+  private static instance: BinanceService | null = null;
+  private baseUrl = 'https://api.binance.com/api/v3';
+  private wsUrl = 'wss://stream.binance.com:9443/ws';
+  private ws: WebSocket | null = null;
+  private priceListeners: Map<string, Set<(price: number) => void>> = new Map();
+  private reconnectAttempts = 0;
+  private maxReconnectAttempts = 5;
+  private currentPrice: number | null = null;
 
-  constructor() {
-    this.baseUrl = API_CONFIG.BINANCE_API_URL;
-    this.wsUrl = API_CONFIG.BINANCE_WEBSOCKET_URL;
+  private constructor() {
+    this.initializeWebSocket();
   }
 
-  async getPairPrice(baseSymbol: string, quoteSymbol: string = 'SOL'): Promise<number> {
+  public static getInstance(): BinanceService {
+    if (!BinanceService.instance) {
+      BinanceService.instance = new BinanceService();
+    }
+    return BinanceService.instance;
+  }
+
+  private initializeWebSocket() {
     try {
-      const symbol = `${baseSymbol}${quoteSymbol}`.toUpperCase();
-      const response = await fetch(`${this.baseUrl}${BINANCE_ENDPOINTS.ticker}?symbol=${symbol}`);
+      if (this.ws?.readyState === WebSocket.OPEN) {
+        this.ws.close();
+      }
+
+      this.ws = new WebSocket(this.wsUrl);
+
+      this.ws.onopen = () => {
+        console.log('WebSocket connected');
+        this.reconnectAttempts = 0;
+        
+        // Subscribe to BTCUSDT ticker stream
+        if (this.ws?.readyState === WebSocket.OPEN) {
+          this.ws.send(JSON.stringify({
+            method: 'SUBSCRIBE',
+            params: ['btcusdt@ticker'],
+            id: 1
+          }));
+        }
+      };
+
+      this.ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.e === '24hrTicker' && data.s === 'BTCUSDT') {
+            const price = parseFloat(data.c);
+            if (!isNaN(price)) {
+              this.currentPrice = price;
+              const listeners = this.priceListeners.get('btcusdt');
+              if (listeners) {
+                listeners.forEach(listener => listener(price));
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error processing WebSocket message:', error);
+        }
+      };
+
+      this.ws.onerror = () => {
+        if (this.reconnectAttempts < this.maxReconnectAttempts) {
+          this.reconnectAttempts++;
+          setTimeout(() => this.initializeWebSocket(), 5000);
+        }
+      };
+
+      this.ws.onclose = () => {
+        if (this.reconnectAttempts < this.maxReconnectAttempts) {
+          this.reconnectAttempts++;
+          setTimeout(() => this.initializeWebSocket(), 5000);
+        }
+      };
+    } catch (error) {
+      console.error('Error initializing WebSocket:', error);
+    }
+  }
+
+  async getCurrentPrice(): Promise<number> {
+    if (this.currentPrice !== null) {
+      return this.currentPrice;
+    }
+
+    try {
+      const response = await fetch(`${this.baseUrl}/ticker/price?symbol=BTCUSDT`);
       const data = await response.json();
-      return parseFloat(data.lastPrice);
+      const price = parseFloat(data.price);
+      this.currentPrice = price;
+      return price;
     } catch (error) {
-      console.error(`Error fetching ${baseSymbol}/${quoteSymbol} price:`, error);
+      console.error('Error fetching current price:', error);
       throw error;
     }
   }
 
-  subscribeToPairTicker(baseSymbol: string, quoteSymbol: string = 'SOL', onMessage: (data: any) => void): WebSocket {
-    const ws = new WebSocket(this.wsUrl);
-    const symbol = `${baseSymbol}${quoteSymbol}`.toLowerCase();
-    const subscribeMsg = {
-      method: 'SUBSCRIBE',
-      params: [
-        `${symbol}@ticker`,
-        `${symbol}@depth20`,
-        `${symbol}@kline_1m`
-      ],
-      id: 1
-    };
+  subscribeToPriceUpdates(symbol: string, callback: (price: number) => void) {
+    const normalizedSymbol = symbol.toLowerCase();
+    if (!this.priceListeners.has(normalizedSymbol)) {
+      this.priceListeners.set(normalizedSymbol, new Set());
+    }
+    this.priceListeners.get(normalizedSymbol)?.add(callback);
 
-    ws.onopen = () => {
-      ws.send(JSON.stringify(subscribeMsg));
-    };
-
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      onMessage(data);
-    };
-
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
-    };
-
-    return ws;
-  }
-
-  async getKlines(baseSymbol: string, quoteSymbol: string = 'SOL', interval: string = '1d', limit: number = 100): Promise<KlineData[]> {
-    try {
-      const symbol = `${baseSymbol}${quoteSymbol}`.toUpperCase();
-      const response = await fetch(
-        `${this.baseUrl}${BINANCE_ENDPOINTS.klines}?symbol=${symbol}&interval=${interval}&limit=${limit}`
-      );
-      const data = await response.json();
-      
-      return data.map((item: any[]) => ({
-        openTime: item[0],
-        open: item[1],
-        high: item[2],
-        low: item[3],
-        close: item[4],
-        volume: item[5],
-        closeTime: item[6],
-        quoteVolume: item[7],
-        trades: item[8],
-        buyBaseVolume: item[9],
-        buyQuoteVolume: item[10]
-      }));
-    } catch (error) {
-      console.error(`Error fetching ${baseSymbol}/${quoteSymbol} klines:`, error);
-      throw error;
+    // Send initial price if available
+    if (this.currentPrice !== null) {
+      callback(this.currentPrice);
     }
   }
 
-  async getOrderBook(baseSymbol: string, quoteSymbol: string = 'SOL', limit: number = 20): Promise<OrderBookData> {
-    try {
-      const symbol = `${baseSymbol}${quoteSymbol}`.toUpperCase();
-      const response = await fetch(
-        `${this.baseUrl}${BINANCE_ENDPOINTS.depth}?symbol=${symbol}&limit=${limit}`
-      );
-      return await response.json();
-    } catch (error) {
-      console.error(`Error fetching ${baseSymbol}/${quoteSymbol} order book:`, error);
-      throw error;
-    }
-  }
-
-  async getAvailablePairs(): Promise<string[]> {
-    try {
-      const response = await fetch(`${this.baseUrl}/exchangeInfo`);
-      const data = await response.json();
-      return data.symbols
-        .filter((symbol: any) => symbol.quoteAsset === 'SOL')
-        .map((symbol: any) => symbol.baseAsset);
-    } catch (error) {
-      console.error('Error fetching available pairs:', error);
-      throw error;
-    }
+  unsubscribeFromPriceUpdates(symbol: string, callback: (price: number) => void) {
+    const normalizedSymbol = symbol.toLowerCase();
+    this.priceListeners.get(normalizedSymbol)?.delete(callback);
   }
 }
 
-export const binanceService = new BinanceService();
+export const binanceService = BinanceService.getInstance();
