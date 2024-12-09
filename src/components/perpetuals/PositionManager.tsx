@@ -81,7 +81,7 @@ export function PositionManager() {
     }
   };
 
-  const openModal = (position: Position, action: 'leverage' | 'collateral') => {
+  const handleModalOpen = (action: 'leverage' | 'collateral', position: Position) => {
     setSelectedPosition(position);
     setModalAction(action);
     setIsOpen(true);
@@ -94,61 +94,54 @@ export function PositionManager() {
   return (
     <div className="space-y-4">
       {positions.length === 0 ? (
-        <div className="text-center py-4 text-muted-foreground">No open positions</div>
+        <p className="text-center text-muted-foreground">No open positions</p>
       ) : (
-        <div className="relative overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-xs uppercase bg-muted">
-              <tr>
-                <th className="px-4 py-2 text-left">Market</th>
-                <th className="px-4 py-2 text-left">Side</th>
-                <th className="px-4 py-2 text-right">Size</th>
-                <th className="px-4 py-2 text-right">Entry Price</th>
-                <th className="px-4 py-2 text-right">Mark Price</th>
-                <th className="px-4 py-2 text-right">PnL</th>
-                <th className="px-4 py-2 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {positions.map((position) => (
-                <tr key={position.user.toString()} className="border-b">
-                  <td className="px-4 py-2">{position.market}</td>
-                  <td className={`px-4 py-2 ${position.direction === TradeDirection.Long ? 'text-green-500' : 'text-red-500'}`}>
-                    {position.direction === TradeDirection.Long ? 'LONG' : 'SHORT'}
-                  </td>
-                  <td className="px-4 py-2 text-right">{formatNumber(position.size.toNumber() / 1e9)}</td>
-                  <td className="px-4 py-2 text-right">${formatNumber(position.entryPrice.toNumber() / 1e9)}</td>
-                  <td className="px-4 py-2 text-right">${formatNumber(currentPrice / 1e9)}</td>
-                  <td className={`px-4 py-2 text-right ${position.unrealizedPnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                    ${formatNumber(position.unrealizedPnl)}
-                  </td>
-                  <td className="px-4 py-2 text-right space-x-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => openModal(position, 'leverage')}
-                    >
-                      Leverage
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => openModal(position, 'collateral')}
-                    >
-                      Collateral
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => handleClose(position)}
-                    >
-                      Close
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="space-y-3">
+          {positions.map((position) => (
+            <div key={position.user.toString()} className="p-3 bg-card rounded-lg border">
+              <div className="flex justify-between items-center mb-2">
+                <span className={`font-medium ${
+                  position.direction === TradeDirection.Long ? 'text-green-500' : 'text-red-500'
+                }`}>
+                  {position.direction === TradeDirection.Long ? 'Long' : 'Short'} {position.market}
+                </span>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => handleClose(position)}
+                  disabled={loading}
+                >
+                  Close
+                </Button>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div>Entry Price: <span className="font-medium">{formatNumber(position.entryPrice.toNumber() / 1e9)} USDT</span></div>
+                <div>Current Price: <span className="font-medium">{formatNumber(currentPrice / 1e9)} USDT</span></div>
+                <div>Size: <span className="font-medium">{formatNumber(position.size.toNumber() / 1e9)} {position.market}</span></div>
+                <div>Leverage: <span className="font-medium">{position.leverage}x</span></div>
+              </div>
+              
+              <div className="flex gap-2 mt-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleModalOpen('leverage', position)}
+                  className="flex-1"
+                >
+                  Adjust Leverage
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleModalOpen('collateral', position)}
+                  className="flex-1"
+                >
+                  Manage Collateral
+                </Button>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 

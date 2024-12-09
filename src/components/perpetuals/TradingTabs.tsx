@@ -15,32 +15,32 @@ const TradingTabsContent = dynamic(() => Promise.resolve(({
 }: any) => {
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
-        {/* Left side - Positions */}
-        <div className="space-y-2">
-          <h3 className="text-lg font-semibold">Positions</h3>
-          <Card className="p-4">
+      <div className="grid grid-cols-1 lg:grid-cols-1 gap-4">
+        {/* Positions */}
+        <div>
+          <h3 className="text-lg font-semibold mb-2">Positions</h3>
+          <Card className="p-4 overflow-auto max-h-[300px]">
             <PositionManager />
           </Card>
         </div>
 
-        {/* Right side - Trade History & Balance Tabs */}
-        <div className="space-y-2">
+        {/* Trade History & Balance */}
+        <div>
           <Tabs defaultValue="history" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-2 mb-2">
               <TabsTrigger value="history">Trade History</TabsTrigger>
               <TabsTrigger value="balance">Balance</TabsTrigger>
             </TabsList>
 
             {/* Trade History Tab */}
-            <TabsContent value="history">
-              <Card className="p-4">
+            <TabsContent value="history" className="mt-0">
+              <Card className="p-4 overflow-auto max-h-[200px]">
                 <div className="space-y-2">
                   {trades.length === 0 ? (
                     <p className="text-center text-muted-foreground">No trade history</p>
                   ) : (
                     trades.map((trade: any, index: number) => (
-                      <div key={index} className="flex justify-between items-center py-2 border-b">
+                      <div key={index} className="flex justify-between items-center py-2 border-b last:border-b-0">
                         <div>
                           <span className={`font-medium ${trade.side === 'buy' ? 'text-green-500' : 'text-red-500'}`}>
                             {trade.side.toUpperCase()}

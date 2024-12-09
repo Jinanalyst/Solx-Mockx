@@ -31,26 +31,35 @@ const TradingInterface: FC = () => {
   }
 
   return (
-    <div className="p-4 space-y-4">
-      <Card>
-        <CardContent className="p-4">
-          <TradePairSelector />
-        </CardContent>
-      </Card>
+    <div className="container mx-auto p-4">
+      <div className="grid grid-cols-12 gap-4">
+        {/* Market selector - spans full width */}
+        <div className="col-span-12">
+          <Card>
+            <CardContent className="p-4">
+              <TradePairSelector />
+            </CardContent>
+          </Card>
+        </div>
 
-      <Card className="overflow-hidden">
-        <CardContent className="p-0">
-          <div className="h-[600px] w-full">
-            <TradingViewWidget symbol={selectedMarket} />
-          </div>
-        </CardContent>
-      </Card>
+        {/* Main trading area - chart */}
+        <div className="col-span-12 lg:col-span-8">
+          <Card className="overflow-hidden h-[600px]">
+            <CardContent className="p-0 h-full">
+              <TradingViewWidget symbol={selectedMarket} />
+            </CardContent>
+          </Card>
+        </div>
 
-      <Card>
-        <CardContent className="p-4">
-          <TradingTabs />
-        </CardContent>
-      </Card>
+        {/* Trading form and info - right side */}
+        <div className="col-span-12 lg:col-span-4">
+          <Card>
+            <CardContent className="p-4">
+              <TradingTabs />
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 };
