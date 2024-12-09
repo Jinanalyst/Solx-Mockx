@@ -5,7 +5,10 @@ export interface TradingPair {
 }
 
 export function formatTradingPair(base: string, quote: string): string {
-  // Format for TradingView (e.g., "BINANCE:BTCUSDT")
+  // Use Raydium for SOLX and MOCKX, Binance for others
+  if (base === 'SOLX' || base === 'MOCKX') {
+    return `RAYDIUM:${base}${quote}`;
+  }
   return `BINANCE:${base}${quote}`;
 }
 
