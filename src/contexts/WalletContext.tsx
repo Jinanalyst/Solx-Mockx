@@ -66,11 +66,17 @@ interface WalletContextType {
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 const RPC_ENDPOINTS = [
-  'https://solana-mainnet.g.alchemy.com/v2/demo',
-  'https://api.mainnet-beta.solana.com',
-  'https://solana-api.projectserum.com',
+  'https://solana-mainnet.g.alchemy.com/v2/keGv4NmfazY3NAt3SWylGQb_xg1iEtfn',
   'https://rpc.ankr.com/solana',
-];
+  'https://api.mainnet-beta.solana.com',
+].filter(Boolean) as string[];
+
+// Configuration for RPC connection
+const connectionConfig = {
+  commitment: 'confirmed',
+  wsEndpoint: 'wss://solana-mainnet.g.alchemy.com/v2/keGv4NmfazY3NAt3SWylGQb_xg1iEtfn',
+  confirmTransactionInitialTimeout: 60000,
+};
 
 // Mock data for development
 const MOCK_BALANCES: TokenBalance[] = [
@@ -94,26 +100,22 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [currentEndpointIndex, setCurrentEndpointIndex] = useState(0);
 
   const rotateEndpoint = () => {
-    console.log('Rotating to next RPC endpoint...');
-    setCurrentEndpointIndex((prev) => (prev + 1) % RPC_ENDPOINTS.length);
-    return RPC_ENDPOINTS[(currentEndpointIndex + 1) % RPC_ENDPOINTS.length];
+    const nextIndex = (currentEndpointIndex + 1) % RPC_ENDPOINTS.length;
+    setCurrentEndpointIndex(nextIndex);
+    return RPC_ENDPOINTS[nextIndex];
   };
 
   const createConnection = (endpoint: string) => {
     console.log('Creating connection to:', endpoint);
-    return new Connection(endpoint, {
-      commitment: 'confirmed',
-      confirmTransactionInitialTimeout: 60000,
-      fetch: (url, options) => {
-        return fetch(url, {
-          ...options,
-          headers: {
-            ...options?.headers,
-            'Content-Type': 'application/json',
-          },
-        });
-      },
+    const conn = new Connection(endpoint, connectionConfig);
+    
+    // Test the connection
+    conn.getVersion().catch(error => {
+      console.warn('Connection test failed:', error);
+      rotateEndpoint();
     });
+    
+    return conn;
   };
 
   useEffect(() => {

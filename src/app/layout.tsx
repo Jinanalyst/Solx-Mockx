@@ -6,6 +6,7 @@ import { MockBalanceProvider } from '@/contexts/MockBalanceContext';
 import { Navbar } from '@/components/Navbar';
 import { ThemeProvider } from '../contexts/ThemeContext';
 import { setInitialTheme } from './theme-script';
+import { PriceProvider } from '@/contexts/PriceContext';
 
 export const metadata: Metadata = {
   title: 'SOLX - Next-Gen DEX on Solana',
@@ -27,14 +28,21 @@ export default function RootLayout({
         />
       </head>
       <body suppressHydrationWarning className="font-sans">
-        <ThemeProvider>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="dark"
+          enableSystem
+          disableTransitionOnChange
+        >
           <Providers>
             <WalletProvider>
               <MockBalanceProvider>
-                <div className="min-h-screen bg-background">
-                  <Navbar />
-                  <main>{children}</main>
-                </div>
+                <PriceProvider>
+                  <div className="min-h-screen bg-background">
+                    <Navbar />
+                    <main>{children}</main>
+                  </div>
+                </PriceProvider>
               </MockBalanceProvider>
             </WalletProvider>
           </Providers>

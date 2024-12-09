@@ -1,38 +1,28 @@
-# SOLX - Next-Gen DEX on Solana
+# SOLX & MOCKX - Next-Gen Trading Platforms on Solana
 
-A next-generation decentralized exchange built on the Solana blockchain, offering lightning-fast trades, deep liquidity, and innovative features.
+A comprehensive trading ecosystem on the Solana blockchain, featuring two distinct platforms:
 
-## Features
+## SOLX - Real Trading Platform
 
+Professional-grade DEX for serious traders:
 - ⚡️ High-performance trading engine
-- 📊 Advanced charting with TradingView integration
-- 💱 Spot and derivatives trading
-- 🎯 Mock trading for practice
+- 📊 Advanced charting with TradingView
+- 💱 Spot and perpetual futures trading
 - 🔒 Secure wallet integration
-- 💰 Staking and yield farming
-- 🎨 Modern, responsive UI
 - ⚙️ Advanced order types
-- 📱 Mobile-friendly design
+- 💰 Fee earning opportunities
+- 🌊 Deep liquidity pools
 
-## Getting Started
+## MOCKX - Paper Trading Platform
 
-1. Clone the repository:
-```bash
-git clone https://github.com/yourusername/solx.git
-cd solx
-```
-
-2. Install dependencies:
-```bash
-npm install
-```
-
-3. Run the development server:
-```bash
-npm run dev
-```
-
-4. Open [http://localhost:3000](http://localhost:3000) in your browser.
+Risk-free practice environment:
+- 🎯 Paper trading with virtual funds
+- 📈 Real market data simulation
+- 🔄 Same features as SOLX
+- 📱 Mobile-friendly interface
+- 🎓 Perfect for learning
+- 📊 Performance tracking
+- 🏆 Trading competitions
 
 ## Technology Stack
 
@@ -43,10 +33,36 @@ npm run dev
 - TradingView Charting Library
 - Shadcn/ui Components
 
+## Getting Started
+
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/solx-mockx.git
+cd solx-mockx
+```
+
+2. Install dependencies:
+```bash
+npm install
+```
+
+3. Set up environment variables:
+```bash
+cp .env.example .env.local
+# Edit .env.local with your configuration
+```
+
+4. Run the development server:
+```bash
+npm run dev
+```
+
+5. Open [http://localhost:3000](http://localhost:3000) in your browser.
+
 ## Contributing
 
 We welcome contributions! Please feel free to submit a Pull Request.
 
 ## License
 
-MIT License - see LICENSE for details
+MIT License
