@@ -2,6 +2,7 @@ import { PublicKey } from '@solana/web3.js';
 import { BN } from '@project-serum/anchor';
 import { Position, OrderParams, MarketState, TradeDirection } from '../perpetuals/types';
 import { TradingRewardsCalculator } from '../utils/tradingRewards';
+import { MockBalanceService } from './mockBalanceService';
 
 export class MockPerpetualTrading {
   private static instance: MockPerpetualTrading;
@@ -9,12 +10,14 @@ export class MockPerpetualTrading {
   private mockPrice: BN;
   private mockFundingRate: BN;
   private rewardsCalculator: TradingRewardsCalculator;
+  private balanceService: MockBalanceService;
 
   private constructor() {
     this.positions = new Map();
     this.mockPrice = new BN(20 * 1e9); // $20 for SOL/USD
     this.mockFundingRate = new BN(0.0001 * 1e6); // 0.01% funding rate
     this.rewardsCalculator = TradingRewardsCalculator.getInstance();
+    this.balanceService = MockBalanceService.getInstance();
   }
 
   static getInstance(): MockPerpetualTrading {
@@ -22,6 +25,10 @@ export class MockPerpetualTrading {
       MockPerpetualTrading.instance = new MockPerpetualTrading();
     }
     return MockPerpetualTrading.instance;
+  }
+
+  async getBalance(user: PublicKey): Promise<BN> {
+    return this.balanceService.getBalance(user);
   }
 
   async openPosition(
@@ -33,12 +40,22 @@ export class MockPerpetualTrading {
     const positionSize = size.mul(new BN(leverage));
     const notionalValue = positionSize.mul(entryPrice).div(new BN(1e9));
     
+    // Check if user has enough balance for collateral
+    const userBalance = await this.balanceService.getBalance(user);
+    if (userBalance.lt(collateral)) {
+      throw new Error('Insufficient balance for collateral');
+    }
+
     // Calculate fees based on leveraged position size
     const { tradingFee, solxReward } = this.rewardsCalculator.calculateLeveragedRewards({
       notionalValue: notionalValue.toNumber() / 1e9,
       leverage: Number(leverage),
       isLong: direction === TradeDirection.Long
     });
+
+    // Deduct collateral and fees from user's balance
+    const totalDeduction = collateral.add(new BN(tradingFee * 1e6));
+    await this.balanceService.updateBalance(user, totalDeduction.neg());
 
     const positionId = Math.random().toString(36).substring(7);
     const position: Position = {
@@ -53,7 +70,7 @@ export class MockPerpetualTrading {
       lastFundingTime: new BN(Date.now() / 1000),
       accumulatedFunding: new BN(0),
       unrealizedPnl: new BN(0),
-      fee: new BN(tradingFee * 1e9)
+      fee: new BN(tradingFee * 1e6)
     };
 
     this.positions.set(positionId, position);
@@ -76,12 +93,16 @@ export class MockPerpetualTrading {
     if (!isProfit) pnl.ineg();
 
     // Calculate rewards based on PnL and leverage
-    const { solxReward } = this.rewardsCalculator.calculateLeveragedRewards({
+    const { solxReward, tradingFee } = this.rewardsCalculator.calculateLeveragedRewards({
       notionalValue: pnl.toNumber() / 1e9,
       leverage: position.leverage,
       isLong: position.direction === TradeDirection.Long,
       isPnL: true
     });
+
+    // Return collateral and PnL to user's balance
+    const returnAmount = position.collateral.add(pnl).sub(new BN(tradingFee * 1e6));
+    await this.balanceService.updateBalance(position.user, returnAmount);
 
     this.positions.delete(positionId);
     return { pnl, mockxReward: solxReward };

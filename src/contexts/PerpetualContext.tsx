@@ -11,6 +11,7 @@ interface PerpetualContextState {
   marketState: MarketState | null;
   currentPrice: BN | null;
   fundingRate: BN | null;
+  balance: BN | null;
   openPosition: (params: OrderParams) => Promise<{ txId: string; mockxReward: number }>;
   closePosition: (positionId: string) => Promise<{ txId: string; pnl: BN; mockxReward: number }>;
   updateLeverage: (positionId: string, newLeverage: number) => Promise<void>;
@@ -28,6 +29,7 @@ export function PerpetualProvider({ children }: { children: React.ReactNode }) {
   const [marketState, setMarketState] = useState<MarketState | null>(null);
   const [currentPrice, setCurrentPrice] = useState<BN | null>(null);
   const [fundingRate, setFundingRate] = useState<BN | null>(null);
+  const [balance, setBalance] = useState<BN | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const toast = useToast();
@@ -39,15 +41,17 @@ export function PerpetualProvider({ children }: { children: React.ReactNode }) {
 
     const fetchData = async () => {
       try {
-        const [price, rate, userPositions] = await Promise.all([
+        const [price, rate, userPositions, userBalance] = await Promise.all([
           mockTrading.getMarketPrice(),
           mockTrading.getFundingRate(),
-          mockTrading.getPositions(publicKey)
+          mockTrading.getPositions(publicKey),
+          mockTrading.getBalance(publicKey)
         ]);
 
         setCurrentPrice(price);
         setFundingRate(rate);
         setPositions(userPositions);
+        setBalance(userBalance);
       } catch (err) {
         console.error('Error fetching data:', err);
         setError(err instanceof Error ? err.message : 'Failed to fetch data');
@@ -137,6 +141,7 @@ export function PerpetualProvider({ children }: { children: React.ReactNode }) {
         marketState,
         currentPrice,
         fundingRate,
+        balance,
         openPosition,
         closePosition,
         updateLeverage,

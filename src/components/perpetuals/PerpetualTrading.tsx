@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { PublicKey } from '@solana/web3.js';
 import BN from 'bn.js';
@@ -21,6 +21,11 @@ import {
   Tabs,
   Text,
   useToast,
+  Grid,
+  Stack,
+  FormControl,
+  FormLabel,
+  FormHelperText,
 } from '@chakra-ui/react';
 
 export function PerpetualTrading() {
@@ -29,6 +34,7 @@ export function PerpetualTrading() {
     positions,
     currentPrice,
     fundingRate,
+    balance,
     openPosition,
     loading,
     error
@@ -39,6 +45,14 @@ export function PerpetualTrading() {
   const [direction, setDirection] = useState<TradeDirection>(TradeDirection.Long);
   const [collateral, setCollateral] = useState('');
   const toast = useToast();
+
+  const formattedBalance = useMemo(() => {
+    if (!balance) return '0.00';
+    return (balance.toNumber() / 1e6).toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  }, [balance]);
 
   useEffect(() => {
     if (error) {
@@ -90,114 +104,103 @@ export function PerpetualTrading() {
     }
   };
 
+  const calculateRequiredCollateral = () => {
+    const leverageValue = Number(leverage);
+    const sizeValue = Number(size);
+    const requiredCollateral = (sizeValue / leverageValue) * 100;
+    return requiredCollateral.toFixed(2);
+  };
+
   return (
     <Box p={4}>
-      <Flex direction="column" gap={4}>
-        {/* Market Information */}
-        <Flex gap={4}>
-          <Stat>
-            <StatLabel>Current Price</StatLabel>
-            <StatNumber>
-              ${currentPrice ? (currentPrice.toNumber() / 1e6).toFixed(2) : '-.--'}
-            </StatNumber>
-          </Stat>
-          <Stat>
-            <StatLabel>Funding Rate</StatLabel>
-            <StatNumber>
-              {fundingRate ? (fundingRate.toNumber() * 100).toFixed(4) : '-.--'}%
-            </StatNumber>
-            <StatHelpText>8h</StatHelpText>
-          </Stat>
-        </Flex>
-
-        {/* Trading Interface */}
-        <Tabs variant="soft-rounded">
-          <TabList>
-            <Tab>Market</Tab>
-            <Tab>Limit</Tab>
-          </TabList>
-
-          <TabPanels>
-            <TabPanel>
-              <form onSubmit={handleSubmit}>
-                <Flex direction="column" gap={4}>
-                  {/* Direction Selection */}
-                  <Flex gap={2}>
-                    <Button
-                      flex={1}
-                      colorScheme={direction === TradeDirection.Long ? 'green' : 'gray'}
-                      onClick={() => setDirection(TradeDirection.Long)}
-                      type="button"
-                    >
-                      Long
-                    </Button>
-                    <Button
-                      flex={1}
-                      colorScheme={direction === TradeDirection.Short ? 'red' : 'gray'}
-                      onClick={() => setDirection(TradeDirection.Short)}
-                      type="button"
-                    >
-                      Short
-                    </Button>
-                  </Flex>
-
-                  {/* Size Input */}
-                  <Box>
-                    <Text mb={2}>Size (SOL)</Text>
-                    <Input
-                      value={size}
-                      onChange={(e) => setSize(e.target.value)}
-                      placeholder="0.00"
-                      type="number"
-                      min="0"
-                    />
-                  </Box>
-
-                  {/* Leverage Selection */}
-                  <Box>
-                    <Text mb={2}>Leverage</Text>
-                    <Select
-                      value={leverage}
-                      onChange={(e) => setLeverage(e.target.value)}
-                    >
-                      {[1, 2, 3, 5, 10, 20].map((lev) => (
-                        <option key={lev} value={lev}>
-                          {lev}x
-                        </option>
-                      ))}
-                    </Select>
-                  </Box>
-
-                  {/* Collateral Input */}
-                  <Box>
-                    <Text mb={2}>Collateral (SOL)</Text>
-                    <Input
-                      value={collateral}
-                      onChange={(e) => setCollateral(e.target.value)}
-                      placeholder="0.00"
-                      type="number"
-                      min="0"
-                    />
-                  </Box>
-
-                  <Button
-                    type="submit"
-                    colorScheme={direction === TradeDirection.Long ? 'green' : 'red'}
-                    isLoading={loading}
-                    loadingText="Opening Position"
-                  >
-                    {direction === TradeDirection.Long ? 'Long' : 'Short'} SOL
-                  </Button>
-                </Flex>
-              </form>
-            </TabPanel>
-
-            <TabPanel>
-              <Text>Limit orders coming soon</Text>
-            </TabPanel>
-          </TabPanels>
-        </Tabs>
+      <Flex justify="space-between" align="center" mb={6}>
+        <Text fontSize="2xl" fontWeight="bold">Perpetual Futures Trading</Text>
+        <Stat textAlign="right">
+          <StatLabel>Available Balance</StatLabel>
+          <StatNumber>${formattedBalance} USDT</StatNumber>
+        </Stat>
       </Flex>
+
+      <Grid templateColumns="repeat(2, 1fr)" gap={6}>
+        <Box>
+          <Tabs variant="enclosed">
+            <TabList>
+              <Tab>Long</Tab>
+              <Tab>Short</Tab>
+            </TabList>
+            <TabPanels>
+              <TabPanel>
+                <form onSubmit={handleSubmit}>
+                  <Stack spacing={4}>
+                    <FormControl>
+                      <FormLabel>Size (SOL)</FormLabel>
+                      <Input
+                        type="number"
+                        value={size}
+                        onChange={(e) => setSize(e.target.value)}
+                        placeholder="Enter size"
+                      />
+                    </FormControl>
+                    
+                    <FormControl>
+                      <FormLabel>Leverage (1-20x)</FormLabel>
+                      <Input
+                        type="number"
+                        value={leverage}
+                        onChange={(e) => setLeverage(e.target.value)}
+                        min="1"
+                        max="20"
+                      />
+                    </FormControl>
+
+                    <FormControl>
+                      <FormLabel>Required Collateral (USDT)</FormLabel>
+                      <Input
+                        value={calculateRequiredCollateral()}
+                        isReadOnly
+                      />
+                      <FormHelperText>
+                        {Number(leverage)}x leverage requires {(100 / Number(leverage)).toFixed(2)}% collateral
+                      </FormHelperText>
+                    </FormControl>
+
+                    <Button
+                      type="submit"
+                      colorScheme={direction === TradeDirection.Long ? 'green' : 'red'}
+                      isLoading={loading}
+                      isDisabled={!publicKey || !size || Number(size) <= 0}
+                    >
+                      {direction === TradeDirection.Long ? 'Long' : 'Short'} SOL/USDT
+                    </Button>
+                  </Stack>
+                </form>
+              </TabPanel>
+              <TabPanel>
+                {/* Similar form for Short position */}
+              </TabPanel>
+            </TabPanels>
+          </Tabs>
+        </Box>
+
+        <Box>
+          <Stat mb={4}>
+            <StatLabel>Current SOL Price</StatLabel>
+            <StatNumber>
+              ${currentPrice ? (currentPrice.toNumber() / 1e9).toFixed(2) : '0.00'}
+            </StatNumber>
+            <StatHelpText>
+              Funding Rate: {fundingRate ? (fundingRate.toNumber() / 1e6 * 100).toFixed(4) : '0.0000'}%
+            </StatHelpText>
+          </Stat>
+
+          {/* Position list */}
+          {positions.map(position => (
+            <Box key={position.id}>
+              {/* PositionCard component */}
+            </Box>
+          ))}
+        </Box>
+      </Grid>
     </Box>
   );
 }
