@@ -10,6 +10,7 @@ import { RiExchangeDollarLine } from 'react-icons/ri';
 import { FaCoins } from 'react-icons/fa';
 import { formatNumber } from '@/utils/format';
 import type { MockBalance } from '@/types/mockTrading';
+import BN from 'bn.js';
 
 interface PortfolioCardProps {
   title: string;
@@ -23,7 +24,11 @@ function PortfolioOverview() {
   const { userSolxStake, userMockxStake } = useStaking();
 
   const totalBalance = balances.reduce((sum: number, balance: MockBalance) => sum + balance.free + balance.locked, 0);
-  const totalStaked = (userSolxStake?.stakedAmount || 0) + (userMockxStake?.stakedAmount || 0);
+  
+  // Convert BN to number for display
+  const solxStaked = userSolxStake?.stakedAmount ? Number(userSolxStake.stakedAmount.toString()) / 1e9 : 0;
+  const mockxStaked = userMockxStake?.stakedAmount ? Number(userMockxStake.stakedAmount.toString()) / 1e9 : 0;
+  const totalStaked = solxStaked + mockxStaked;
 
   const portfolioCards: PortfolioCardProps[] = [
     {
