@@ -13,8 +13,11 @@ export const RPC_ENDPOINTS = {
 
 // Common token mints on Mainnet
 export const TOKEN_MINTS = {
-  SOL: new PublicKey('So11111111111111111111111111111111111111112'),
-  USDC: new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'),
+  SOLX: process.env.NEXT_PUBLIC_SOLX_MINT || '',  
+  USDT: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',  
+  USDC: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',  
+  SOL: 'So11111111111111111111111111111111111111112',    
+  MOCKX: process.env.NEXT_PUBLIC_MOCKX_MINT || '',  
   RAY: new PublicKey('4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R'),
   SRM: new PublicKey('SRMuApVNdxXokk5GT7XD5cUUgXMBCoAz2LHeuAoKWRt'),
   WSOL: new PublicKey('So11111111111111111111111111111111111111112'),

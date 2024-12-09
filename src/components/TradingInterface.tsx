@@ -34,6 +34,8 @@ import { PerpetualProvider } from '../contexts/PerpetualContext';
 import { PerpetualTrading } from './perpetuals/PerpetualTrading';
 import { PositionManager } from './perpetuals/PositionManager';
 import { MarketStats } from './perpetuals/MarketStats';
+import { tradingBalanceService } from '@/services/tradingBalanceService';
+import { Card, CardContent } from '@/components/ui/card';
 
 interface TradingInterfaceProps {
   onPositionClose?: (positionId: string) => void;
@@ -49,6 +51,8 @@ const TradingInterface: FC<TradingInterfaceProps> = ({ onPositionClose }) => {
   const [error, setError] = useState<string | null>(null);
   const [lastPrice, setLastPrice] = useState<number | null>(null);
   const [priceChange24h, setPriceChange24h] = useState<number | null>(null);
+  const [baseBalance, setBaseBalance] = useState<number>(0);
+  const [quoteBalance, setQuoteBalance] = useState<number>(0);
   const wallet = useWallet();
   const { toast } = useToast();
 
@@ -57,6 +61,35 @@ const TradingInterface: FC<TradingInterfaceProps> = ({ onPositionClose }) => {
     const interval = setInterval(fetchLatestPrice, 10000); // Update every 10 seconds
     return () => clearInterval(interval);
   }, [selectedPair]);
+
+  useEffect(() => {
+    if (wallet.connected && wallet.publicKey) {
+      fetchBalances();
+    } else {
+      setBaseBalance(0);
+      setQuoteBalance(0);
+    }
+  }, [wallet.connected, wallet.publicKey, selectedPair]);
+
+  const fetchBalances = async () => {
+    if (!wallet.publicKey) return;
+
+    const [baseToken, quoteToken] = selectedPair.split('/');
+    const walletAddress = wallet.publicKey.toString();
+
+    try {
+      const [base, quote] = await Promise.all([
+        tradingBalanceService.getBalance(walletAddress, baseToken),
+        tradingBalanceService.getBalance(walletAddress, quoteToken)
+      ]);
+
+      setBaseBalance(base);
+      setQuoteBalance(quote);
+    } catch (error) {
+      console.error('Error fetching balances:', error);
+      setError('Failed to fetch balances');
+    }
+  };
 
   const fetchLatestPrice = async () => {
     try {
@@ -102,51 +135,56 @@ const TradingInterface: FC<TradingInterfaceProps> = ({ onPositionClose }) => {
       setError('Please enter a valid price');
       return false;
     }
+
+    const orderAmount = parseFloat(amount);
+    const orderPrice = orderType === 'limit' ? parseFloat(price) : lastPrice || 0;
+    const totalCost = orderAmount * orderPrice;
+
+    if (side === 'buy' && totalCost > quoteBalance) {
+      setError(`Insufficient ${selectedPair.split('/')[1]} balance`);
+      return false;
+    }
+    if (side === 'sell' && orderAmount > baseBalance) {
+      setError(`Insufficient ${selectedPair.split('/')[0]} balance`);
+      return false;
+    }
+
     return true;
   };
 
-  const handleOrderSubmit = async () => {
-    if (!validateOrder()) return;
+  const handleTrade = async () => {
+    if (!validateOrder() || !wallet.publicKey) return;
+
+    const orderAmount = parseFloat(amount);
+    const orderPrice = orderType === 'limit' ? parseFloat(price) : lastPrice || 0;
+    const [baseToken, quoteToken] = selectedPair.split('/');
+    const walletAddress = wallet.publicKey.toString();
 
     setIsLoading(true);
-    setError(null);
-
     try {
-      const [baseToken, quoteToken] = selectedPair.split('/');
-      const parsedAmount = parseFloat(amount);
-      const parsedPrice = orderType === 'limit' ? parseFloat(price) : lastPrice || 0;
-      const totalValue = parsedAmount * parsedPrice;
+      const success = await tradingBalanceService.executeTrade(
+        walletAddress,
+        baseToken,
+        quoteToken,
+        orderAmount,
+        orderPrice,
+        side === 'buy'
+      );
 
-      // Calculate fixed trading fee
-      const rewardsCalculator = TradingRewardsCalculator.getInstance();
-      const feeLamports = rewardsCalculator.toSolLamports(rewardsCalculator.DEFAULT_FEE_CONFIG.baseFee);
-
-      // Implement order submission logic
-      console.log('Submitting order:', {
-        pair: selectedPair,
-        type: orderType,
-        side,
-        amount: parsedAmount,
-        price: orderType === 'limit' ? parsedPrice : 'market',
-        tradingFee: rewardsCalculator.DEFAULT_FEE_CONFIG.baseFee,
-        totalValue
-      });
-
-      // Display order details with fees
-      toast({
-        title: 'Order Submitted',
-        description: 
-          `Successfully placed ${side} order for ${parsedAmount} ${baseToken}\n` +
-          `Price: $${parsedPrice.toFixed(4)}\n` +
-          `Trading Fee: ${rewardsCalculator.DEFAULT_FEE_CONFIG.baseFee} SOL`,
-      });
-
-      // Clear form after successful submission
-      setAmount('');
-      if (orderType === 'limit') setPrice('');
-    } catch (error) {
-      console.error('Error submitting order:', error);
-      setError('Failed to submit order. Please try again.');
+      if (success) {
+        toast({
+          title: "Trade Successful",
+          description: `Successfully ${side} ${orderAmount} ${baseToken} at ${orderPrice} ${quoteToken}`,
+        });
+        setAmount('');
+        setPrice('');
+        fetchBalances();
+      } else {
+        setError('Insufficient balance for trade');
+      }
+    } catch (err) {
+      console.error('Trade error:', err);
+      setError('Failed to execute trade');
     } finally {
       setIsLoading(false);
     }
@@ -175,6 +213,28 @@ const TradingInterface: FC<TradingInterfaceProps> = ({ onPositionClose }) => {
           {/* Right Column - Trading Interface */}
           <Box>
             <PerpetualTrading />
+            <Box className="flex justify-between items-center">
+              <TradePairSelector
+                selectedPair={selectedPair}
+                onPairChange={handleTradePairChange}
+              />
+              <Card className="p-2">
+                <CardContent className="flex space-x-4">
+                  <div>
+                    <p className="text-sm text-muted-foreground">
+                      {selectedPair.split('/')[0]} Balance
+                    </p>
+                    <p className="font-medium">{baseBalance.toFixed(4)}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">
+                      {selectedPair.split('/')[1]} Balance
+                    </p>
+                    <p className="font-medium">{quoteBalance.toFixed(4)}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </Box>
           </Box>
         </Grid>
       </Box>
