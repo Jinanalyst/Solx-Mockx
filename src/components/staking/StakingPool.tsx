@@ -2,25 +2,24 @@
 
 import React, { FC, useState } from 'react';
 import { useStaking } from '@/contexts/StakingContext';
-import { BigNumberish } from '@ethersproject/bignumber';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { formatUnits, parseUnits } from '@ethersproject/units';
+import BN from 'bn.js';
 
 interface UserStake {
-  stakedAmount: BigNumberish;
-  rewardsEarned: BigNumberish;
+  stakedAmount: BN;
+  rewardsEarned: BN;
   stakingDuration: number;
 }
 
 interface StakingPoolProps {
   tokenSymbol: string;
   apy: number;
-  totalStaked: BigNumberish;
+  totalStaked: BN;
   userStake?: UserStake;
-  onStake: (amount: BigNumberish) => Promise<void>;
-  onUnstake: (amount: BigNumberish) => Promise<void>;
+  onStake: (amount: BN) => Promise<void>;
+  onUnstake: (amount: BN) => Promise<void>;
   onClaimRewards: () => Promise<void>;
   onError: (error: unknown) => void;
 }
@@ -28,21 +27,34 @@ interface StakingPoolProps {
 interface StakingContext {
   solxPool: {
     apy: number;
-    totalStaked: BigNumberish;
+    totalStaked: BN;
   };
   mockxPool: {
     apy: number;
-    totalStaked: BigNumberish;
+    totalStaked: BN;
   };
   userSolxStake?: UserStake;
   userMockxStake?: UserStake;
-  stakeSolx: (amount: BigNumberish) => Promise<void>;
-  stakeMockx: (amount: BigNumberish) => Promise<void>;
-  unstakeSolx: (amount: BigNumberish) => Promise<void>;
-  unstakeMockx: (amount: BigNumberish) => Promise<void>;
+  stakeSolx: (amount: BN) => Promise<void>;
+  stakeMockx: (amount: BN) => Promise<void>;
+  unstakeSolx: (amount: BN) => Promise<void>;
+  unstakeMockx: (amount: BN) => Promise<void>;
   claimSolxRewards: () => Promise<void>;
   claimMockxRewards: () => Promise<void>;
 }
+
+const formatAmount = (amount: BN, decimals: number = 9): string => {
+  const divisor = new BN(10).pow(new BN(decimals));
+  const integerPart = amount.div(divisor);
+  const fractionalPart = amount.mod(divisor).toString().padStart(decimals, '0');
+  return `${integerPart.toString()}.${fractionalPart}`;
+};
+
+const parseAmount = (amount: string, decimals: number = 9): BN => {
+  const [integer, fraction = ''] = amount.split('.');
+  const paddedFraction = fraction.padEnd(decimals, '0');
+  return new BN(integer + paddedFraction);
+};
 
 const StakingPool: FC<StakingPoolProps> = ({
   tokenSymbol,
@@ -63,7 +75,8 @@ const StakingPool: FC<StakingPoolProps> = ({
   const handleStake = async () => {
     try {
       setIsStaking(true);
-      await onStake(parseUnits(stakeAmount, 18));
+      const parsedAmount = parseAmount(stakeAmount);
+      await onStake(parsedAmount);
       setStakeAmount('');
     } catch (error) {
       onError(error);
@@ -75,7 +88,8 @@ const StakingPool: FC<StakingPoolProps> = ({
   const handleUnstake = async () => {
     try {
       setIsUnstaking(true);
-      await onUnstake(parseUnits(unstakeAmount, 18));
+      const parsedAmount = parseAmount(unstakeAmount);
+      await onUnstake(parsedAmount);
       setUnstakeAmount('');
     } catch (error) {
       onError(error);
@@ -96,97 +110,70 @@ const StakingPool: FC<StakingPoolProps> = ({
   };
 
   return (
-    <Card className="p-6 bg-card">
-      <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <h3 className="text-2xl font-bold">{tokenSymbol} Staking</h3>
-          <div className="text-right">
-            <p className="text-sm text-muted-foreground">APY</p>
-            <p className="text-xl font-bold text-primary">{apy}%</p>
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <p className="text-sm text-muted-foreground">Total Staked</p>
-          <p className="text-lg">{formatUnits(totalStaked, 18)} {tokenSymbol}</p>
-        </div>
-
-        {userStake && (
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">Your Stake</p>
-              <p className="text-lg">{formatUnits(userStake.stakedAmount, 18)} {tokenSymbol}</p>
-            </div>
-
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">Rewards Earned</p>
-              <p className="text-lg">{formatUnits(userStake.rewardsEarned, 18)} {tokenSymbol}</p>
-            </div>
-
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">Staking Duration</p>
-              <p className="text-lg">{userStake.stakingDuration} days</p>
-            </div>
-          </div>
-        )}
-
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Stake Amount</label>
-            <div className="flex space-x-2">
-              <Input
-                type="number"
-                value={stakeAmount}
-                onChange={(e) => setStakeAmount(e.target.value)}
-                placeholder="0.0"
-                min="0"
-              />
-              <Button 
-                onClick={handleStake} 
-                disabled={!stakeAmount || isStaking}
-              >
-                {isStaking ? 'Staking...' : 'Stake'}
-              </Button>
-            </div>
-          </div>
-
-          {userStake && userStake.stakedAmount.gt(0) && (
-            <>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Unstake Amount</label>
-                <div className="flex space-x-2">
-                  <Input
-                    type="number"
-                    value={unstakeAmount}
-                    onChange={(e) => setUnstakeAmount(e.target.value)}
-                    placeholder="0.0"
-                    min="0"
-                  />
-                  <Button 
-                    onClick={handleUnstake}
-                    disabled={!unstakeAmount || isUnstaking}
-                  >
-                    {isUnstaking ? 'Unstaking...' : 'Unstake'}
-                  </Button>
-                </div>
-              </div>
-
-              <Button
-                className="w-full"
-                onClick={handleClaimRewards}
-                disabled={!userStake.rewardsEarned || isClaiming}
-              >
-                {isClaiming ? 'Claiming...' : 'Claim Rewards'}
-              </Button>
-            </>
-          )}
-        </div>
+    <Card className="p-6 space-y-4">
+      <div className="flex justify-between items-center">
+        <h3 className="text-lg font-semibold">{tokenSymbol} Staking Pool</h3>
+        <span className="text-sm text-gray-500">APY: {apy}%</span>
       </div>
+
+      <div className="space-y-2">
+        <p className="text-sm text-gray-500">Total Staked</p>
+        <p className="font-medium">{formatAmount(totalStaked)} {tokenSymbol}</p>
+      </div>
+
+      {userStake && (
+        <div className="space-y-2">
+          <p className="text-sm text-gray-500">Your Stake</p>
+          <p className="font-medium">{formatAmount(userStake.stakedAmount)} {tokenSymbol}</p>
+          <p className="text-sm text-gray-500">Rewards Earned</p>
+          <p className="font-medium">{formatAmount(userStake.rewardsEarned)} {tokenSymbol}</p>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        <Input
+          type="number"
+          placeholder="Amount to stake"
+          value={stakeAmount}
+          onChange={(e) => setStakeAmount(e.target.value)}
+        />
+        <Button
+          className="w-full"
+          onClick={handleStake}
+          disabled={!stakeAmount || isStaking}
+        >
+          {isStaking ? 'Staking...' : 'Stake'}
+        </Button>
+      </div>
+
+      <div className="space-y-2">
+        <Input
+          type="number"
+          placeholder="Amount to unstake"
+          value={unstakeAmount}
+          onChange={(e) => setUnstakeAmount(e.target.value)}
+        />
+        <Button
+          className="w-full"
+          onClick={handleUnstake}
+          disabled={!unstakeAmount || isUnstaking}
+        >
+          {isUnstaking ? 'Unstaking...' : 'Unstake'}
+        </Button>
+      </div>
+
+      <Button
+        className="w-full"
+        onClick={handleClaimRewards}
+        disabled={!userStake?.rewardsEarned || isClaiming}
+      >
+        {isClaiming ? 'Claiming...' : 'Claim Rewards'}
+      </Button>
     </Card>
   );
 };
 
-export function StakingPoolContainer({ onError }: { onError: (error: unknown) => void }) {
+export const StakingPoolContainer: FC<{ onError: (error: unknown) => void }> = ({ onError }) => {
   const {
     solxPool,
     mockxPool,
@@ -200,13 +187,8 @@ export function StakingPoolContainer({ onError }: { onError: (error: unknown) =>
     claimMockxRewards,
   } = useStaking();
 
-  if (!solxPool || !mockxPool) {
-    return <div>Loading staking pools...</div>;
-  }
-
   return (
-    <div className="space-y-8">
-      {/* Solx Staking Pool */}
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
       <StakingPool
         tokenSymbol="SOLX"
         apy={solxPool.apy}
@@ -217,8 +199,6 @@ export function StakingPoolContainer({ onError }: { onError: (error: unknown) =>
         onClaimRewards={claimSolxRewards}
         onError={onError}
       />
-
-      {/* Mockx Staking Pool */}
       <StakingPool
         tokenSymbol="MOCKX"
         apy={mockxPool.apy}
@@ -231,4 +211,6 @@ export function StakingPoolContainer({ onError }: { onError: (error: unknown) =>
       />
     </div>
   );
-}
+};
+
+export default StakingPoolContainer;
