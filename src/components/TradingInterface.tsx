@@ -9,7 +9,7 @@ import { TradePairSelector } from './trading/TradePairSelector';
 import { UserPositions } from './trading/UserPositions';
 import { TradeHistory } from './trading/TradeHistory';
 import TradingChart from './TradingChart';
-import { TradingViewWidget } from './TradingViewWidget';
+import { TradingViewWidget } from './trading/TradingViewWidget';
 import { RAYDIUM_POOLS, TOKEN_MINTS, API_ENDPOINTS, RaydiumPriceData } from '@/config/api';
 import { raydiumService } from '@/services/raydium';
 
@@ -18,61 +18,71 @@ interface TradingInterfaceProps {
 }
 
 const TradingInterface: FC<TradingInterfaceProps> = ({ onPositionClose }) => {
-  const { connected, publicKey } = useWallet();
-  const [selectedPair, setSelectedPair] = useState<string>('MOCKX/USDT');
-  const [orderType, setOrderType] = useState<'spot' | 'margin' | 'futures'>('spot');
+  const [selectedPair, setSelectedPair] = useState('SOLX/USDC');
+  const [orderType, setOrderType] = useState<'limit' | 'market'>('limit');
   const [side, setSide] = useState<'buy' | 'sell'>('buy');
-  const [amount, setAmount] = useState<string>('');
-  const [price, setPrice] = useState<string>('');
-  const [leverage, setLeverage] = useState<number>(1);
+  const [amount, setAmount] = useState('');
+  const [price, setPrice] = useState('');
+  const wallet = useWallet();
 
-  const [baseSymbol, quoteSymbol] = selectedPair.split('/');
+  const handleTradePairChange = (pair: string) => {
+    setSelectedPair(pair);
+  };
 
-  const handlePlaceOrder = () => {
-    if (!connected || !publicKey) return;
-    // Place order logic will be implemented here
+  const handleOrderSubmit = async () => {
+    if (!wallet.connected) {
+      // Show connect wallet message
+      return;
+    }
+
+    try {
+      // Implement order submission logic
+      console.log('Submitting order:', {
+        pair: selectedPair,
+        type: orderType,
+        side,
+        amount,
+        price: orderType === 'limit' ? price : 'market',
+      });
+    } catch (error) {
+      console.error('Error submitting order:', error);
+    }
   };
 
   return (
-    <div className="grid grid-cols-12 gap-4 p-4">
-      {/* Left Column - Order Form and Trade History */}
-      <div className="col-span-3 space-y-4">
-        <TradePairSelector
-          selectedPair={selectedPair}
-          onPairSelect={setSelectedPair}
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 p-4">
+      {/* Chart Section */}
+      <div className="lg:col-span-2 bg-card rounded-lg p-4" style={{ height: '600px' }}>
+        <TradingViewWidget 
+          symbol={selectedPair.replace('/', '')} 
+          theme="dark"
         />
+      </div>
+
+      {/* Trading Interface */}
+      <div className="space-y-4">
+        <TradePairSelector 
+          selectedPair={selectedPair} 
+          onPairChange={handleTradePairChange} 
+        />
+        
         <OrderForm
-          type={orderType}
+          orderType={orderType}
+          setOrderType={setOrderType}
           side={side}
+          setSide={setSide}
           amount={amount}
+          setAmount={setAmount}
           price={price}
-          leverage={leverage}
-          onTypeChange={setOrderType}
-          onSideChange={setSide}
-          onAmountChange={setAmount}
-          onPriceChange={setPrice}
-          onLeverageChange={setLeverage}
-          onSubmit={handlePlaceOrder}
+          setPrice={setPrice}
+          onSubmit={handleOrderSubmit}
         />
-        <TradeHistory pair={selectedPair} />
-      </div>
 
-      {/* Center Column - Chart */}
-      <div className="col-span-6">
-        <TradingChart
-          baseSymbol={baseSymbol}
-          quoteSymbol={quoteSymbol}
-          height={500}
-        />
-      </div>
-
-      {/* Right Column - Order Book and Positions */}
-      <div className="col-span-3 space-y-4">
-        <OrderBook
-          pair={selectedPair}
-          onPriceClick={(price) => setPrice(price.toString())}
-        />
-        <UserPositions />
+        <OrderBook pair={selectedPair} />
+        
+        {wallet.connected && (
+          <UserPositions onPositionClose={onPositionClose} />
+        )}
       </div>
     </div>
   );

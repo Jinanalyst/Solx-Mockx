@@ -10,15 +10,13 @@ export const metadata: Metadata = {
   description: 'A next-generation decentralized exchange built on Solana',
 };
 
-const fontClass = 'font-sans';
-
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={fontClass}>
+    <html lang="en" className="font-sans">
       <body>
         <ThemeProvider>
           <Providers>

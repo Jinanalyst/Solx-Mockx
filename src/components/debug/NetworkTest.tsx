@@ -1,48 +1,53 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { FC, useState } from 'react';
 import { Connection } from '@solana/web3.js';
 import { Button } from '@/components/ui/button';
 
-export function NetworkTest() {
-  const [status, setStatus] = useState<string>('');
-  const [loading, setLoading] = useState(false);
+const NETWORKS = {
+  'Mainnet Beta': 'https://api.mainnet-beta.solana.com',
+  'Devnet': 'https://api.devnet.solana.com',
+  'Testnet': 'https://api.testnet.solana.com',
+  'Localnet': 'http://localhost:8899',
+};
 
-  const testConnection = async () => {
-    setLoading(true);
-    setStatus('Testing connections...');
+const NetworkTest: FC = () => {
+  const [status, setStatus] = useState<string>('Click to test network connections...');
 
-    const endpoints = {
-      mainnet: 'https://api.mainnet-beta.solana.com',
-      devnet: 'https://api.devnet.solana.com',
-      testnet: 'https://api.testnet.solana.com'
-    };
-
-    for (const [network, endpoint] of Object.entries(endpoints)) {
-      try {
-        setStatus(`Testing ${network}...`);
-        const connection = new Connection(endpoint);
-        const version = await connection.getVersion();
-        setStatus(prev => `${prev}\n${network}: Connected! Version: ${JSON.stringify(version)}`);
-      } catch (error) {
-        setStatus(prev => `${prev}\n${network}: Failed - ${error.message}`);
-      }
+  const testConnection = async (network: string, endpoint: string) => {
+    const connection = new Connection(endpoint);
+    
+    try {
+      const version = await connection.getVersion();
+      setStatus(prev => `${prev}\n${network}: Connected! Version: ${JSON.stringify(version)}`);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      setStatus(prev => `${prev}\n${network}: Failed - ${errorMessage}`);
     }
+  };
 
-    setLoading(false);
+  const testAllConnections = async () => {
+    setStatus('Testing connections...\n');
+    
+    for (const [network, endpoint] of Object.entries(NETWORKS)) {
+      await testConnection(network, endpoint);
+    }
   };
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="p-4 bg-card rounded-lg">
+      <h2 className="text-xl font-bold mb-4">Network Connection Test</h2>
       <Button 
-        onClick={testConnection}
-        disabled={loading}
+        onClick={testAllConnections}
+        className="mb-4"
       >
-        Test Network Connections
+        Test Connections
       </Button>
-      <pre className="p-4 bg-gray-100 rounded-lg whitespace-pre-wrap">
-        {status || 'Click button to test connections'}
+      <pre className="whitespace-pre-wrap bg-muted p-4 rounded">
+        {status}
       </pre>
     </div>
   );
-}
+};
+
+export default NetworkTest;

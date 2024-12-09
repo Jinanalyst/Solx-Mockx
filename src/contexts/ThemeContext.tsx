@@ -15,27 +15,37 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
-    if (typeof window !== 'undefined') {
-      const savedTheme = localStorage.getItem('theme') as ThemeMode;
-      if (savedTheme) return savedTheme;
-      
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      return prefersDark ? 'dark' : 'light';
-    }
-    return 'dark';
-  });
+  const [mounted, setMounted] = useState(false);
+  const [themeMode, setThemeMode] = useState<ThemeMode>('dark'); // Default to dark theme for SSR
 
   useEffect(() => {
-    localStorage.setItem('theme', themeMode);
-    document.documentElement.setAttribute('data-theme', themeMode);
-  }, [themeMode]);
+    setMounted(true);
+    const savedTheme = localStorage.getItem('theme') as ThemeMode;
+    if (savedTheme) {
+      setThemeMode(savedTheme);
+    } else {
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      setThemeMode(prefersDark ? 'dark' : 'light');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (mounted) {
+      localStorage.setItem('theme', themeMode);
+      document.documentElement.setAttribute('data-theme', themeMode);
+    }
+  }, [themeMode, mounted]);
 
   const theme = themeMode === 'light' ? lightTheme : darkTheme;
 
   const toggleTheme = () => {
     setThemeMode(prev => prev === 'light' ? 'dark' : 'light');
   };
+
+  // Prevent hydration mismatch by not rendering until mounted
+  if (!mounted) {
+    return <>{children}</>;
+  }
 
   return (
     <ThemeContext.Provider value={{ theme, themeMode, toggleTheme }}>
