@@ -24,14 +24,14 @@ function PortfolioOverview() {
   const { userSolxStake, userMockxStake } = useStaking();
 
   const totalBalance = balances.reduce((sum: number, balance: MockBalance) => {
-    // Use type assertion to handle BN type
-    const free = typeof balance.free === 'object' && balance.free?.toString ? 
+    // Convert BN values to numbers
+    const free = balance.free instanceof BN ? 
       Number(balance.free.toString()) / 1e6 : 
-      Number(balance.free);
+      Number(balance.free) / 1e6;
     
-    const locked = typeof balance.locked === 'object' && balance.locked?.toString ? 
+    const locked = balance.locked instanceof BN ? 
       Number(balance.locked.toString()) / 1e6 : 
-      Number(balance.locked);
+      Number(balance.locked) / 1e6;
       
     return sum + free + locked;
   }, 0);

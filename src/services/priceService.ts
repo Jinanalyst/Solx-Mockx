@@ -67,7 +67,7 @@ export async function fetchTokenPrices(): Promise<{ [key: string]: TokenPrice }>
     return prices;
   } catch (error) {
     console.error('Error fetching token prices:', error);
-    throw error;
+    return {};
   }
 }
 
@@ -80,28 +80,36 @@ export function calculatePairPrice(
   const basePrice = prices[baseCurrency]?.currentPrice;
   const quotePrice = prices[quoteCurrency]?.currentPrice;
 
-  if (!basePrice || !quotePrice) {
+  if (basePrice === undefined || quotePrice === undefined) {
     return null;
   }
 
-  // If quote is USDC, return base price directly
-  if (quoteCurrency === 'USDC') {
+  // If quote is USDC or USDT, just return base price
+  if (quoteCurrency === 'USDC' || quoteCurrency === 'USDT') {
     return basePrice;
   }
 
-  // Otherwise calculate the ratio
   return basePrice / quotePrice;
 }
 
 // Format price with appropriate decimals
 export function formatPrice(price: number): string {
-  if (price < 0.01) {
-    return price.toFixed(6);
-  } else if (price < 1) {
-    return price.toFixed(4);
-  } else if (price < 10000) {
+  if (price >= 1) {
     return price.toFixed(2);
+  } else if (price >= 0.0001) {
+    return price.toFixed(4);
   } else {
-    return price.toFixed(0);
+    return price.toFixed(8);
+  }
+}
+
+// Get price from API for a specific token
+export async function getPriceFromAPI(symbol: string): Promise<number> {
+  try {
+    const prices = await fetchTokenPrices();
+    return prices[symbol]?.currentPrice || 0;
+  } catch (error) {
+    console.error(`Error getting price for ${symbol}:`, error);
+    return 0;
   }
 }

@@ -3,10 +3,13 @@
 import React from 'react';
 import { Card } from '@/components/ui/card';
 import { useMockBalance } from '@/contexts/MockBalanceContext';
+import { TradingViewWidget } from './TradingViewWidget';
+import { TradePanel } from './TradePanel';
+import { Positions } from './Positions';
 
 interface TradingPair {
   name: string;
-  protocol: 'Raydium' | 'Jupiter';
+  symbol: string;
   baseToken: string;
   quoteToken: string;
   price: string;
@@ -18,7 +21,7 @@ interface TradingPair {
 const tradingPairs: TradingPair[] = [
   {
     name: 'BTC/USDT',
-    protocol: 'Jupiter',
+    symbol: 'BTCUSDT',
     baseToken: 'BTC',
     quoteToken: 'USDT',
     price: '99,447.98',
@@ -28,7 +31,7 @@ const tradingPairs: TradingPair[] = [
   },
   {
     name: 'ETH/USDT',
-    protocol: 'Jupiter',
+    symbol: 'ETHUSDT',
     baseToken: 'ETH',
     quoteToken: 'USDT',
     price: '3,905.86',
@@ -38,7 +41,7 @@ const tradingPairs: TradingPair[] = [
   },
   {
     name: 'SOL/USDT',
-    protocol: 'Raydium',
+    symbol: 'SOLUSDT',
     baseToken: 'SOL',
     quoteToken: 'USDT',
     price: '230.58',
@@ -76,41 +79,69 @@ export function MockTrading() {
   }, []);
 
   return (
-    <Card className="col-span-4 lg:col-span-3">
-      <div className="flex flex-col h-full">
-        <div className="p-6 flex items-center justify-between border-b">
-          <div className="flex items-center space-x-4">
-            <select
-              className="bg-background text-foreground px-2 py-1 rounded-md border"
-              value={selectedPair.name}
-              onChange={(e) => {
-                const pair = tradingPairs.find(p => p.name === e.target.value);
-                if (pair) setSelectedPair(pair);
-              }}
-            >
-              {tradingPairs.map((pair) => (
-                <option key={pair.name} value={pair.name}>
-                  {pair.name}
-                </option>
-              ))}
-            </select>
-            <div className="flex items-center space-x-2">
-              <span className="text-sm text-muted-foreground">Mock Balance:</span>
-              <span className="font-medium">
-                {`${usdtBalance.toFixed(2)} USDT`}
-              </span>
-            </div>
-          </div>
-          <div className="flex items-center space-x-4">
-            <span className="text-2xl font-bold">
+    <div className="flex flex-col h-screen bg-[#0b0e11]">
+      {/* Top Navigation Bar */}
+      <div className="h-14 border-b border-gray-800 flex items-center px-4 justify-between">
+        {/* Left Section - Trading Pair Info */}
+        <div className="flex items-center space-x-4">
+          <select
+            className="bg-background text-foreground px-2 py-1 rounded-md border"
+            value={selectedPair.name}
+            onChange={(e) => {
+              const pair = tradingPairs.find(p => p.name === e.target.value);
+              if (pair) setSelectedPair(pair);
+            }}
+          >
+            {tradingPairs.map((pair) => (
+              <option key={pair.name} value={pair.name}>
+                {pair.name}
+              </option>
+            ))}
+          </select>
+          <div className="flex items-center space-x-2">
+            <span className={`text-2xl font-semibold ${selectedPair.change24h >= 0 ? 'text-[#02c076]' : 'text-[#f6465d]'}`}>
               ${prices[selectedPair.name] || selectedPair.price}
             </span>
-            <span className={`${selectedPair.change24h >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+            <span className={`text-sm ${selectedPair.change24h >= 0 ? 'text-[#02c076]' : 'text-[#f6465d]'}`}>
               {selectedPair.change24h >= 0 ? '+' : ''}{selectedPair.change24h}%
             </span>
           </div>
         </div>
+
+        {/* Right Section - Volume and Balance */}
+        <div className="flex items-center space-x-4">
+          <span className="text-gray-400">
+            24h Volume: {selectedPair.volume24h} USDT
+          </span>
+          <span className="text-gray-400">|</span>
+          <span className="text-gray-400">
+            Mock Balance: {usdtBalance.toFixed(2)} USDT
+          </span>
+        </div>
       </div>
-    </Card>
+
+      {/* Main Content Area */}
+      <div className="flex-1 grid grid-cols-12 gap-4 p-4 min-h-0">
+        {/* Left Section - Chart and Positions */}
+        <div className="col-span-8 grid grid-rows-[1fr_auto] gap-4 min-h-0">
+          {/* Chart */}
+          <div className="rounded-lg overflow-hidden border border-gray-800 min-h-0">
+            <TradingViewWidget symbol={selectedPair.symbol} />
+          </div>
+          
+          {/* Positions */}
+          <div className="h-[200px] min-h-0 overflow-auto">
+            <Positions />
+          </div>
+        </div>
+
+        {/* Right Section - Trade Panel */}
+        <div className="col-span-4 min-h-0">
+          <div className="h-full overflow-auto">
+            <TradePanel symbol={selectedPair.name} />
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
