@@ -12,7 +12,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { parseUnits } from 'ethers';
+import BN from 'bn.js';
+import { parseStakeAmount } from '@/utils/staking';
 
 export function TestStaking() {
   const { connection } = useConnection();
@@ -30,166 +31,144 @@ export function TestStaking() {
     claimMockxRewards,
   } = useStaking();
 
+  const [selectedToken, setSelectedToken] = useState('SOLX');
   const [amount, setAmount] = useState('');
-  const [duration, setDuration] = useState('7');
-  const [rewardToken, setRewardToken] = useState('SOLX');
-  const [isStaking, setIsStaking] = useState(false);
+  const [duration, setDuration] = useState('30');
 
-  const handleStakeSolx = async () => {
+  const handleStake = async () => {
+    if (!amount) return;
+
+    const parsedAmount = parseStakeAmount(amount);
     try {
-      setIsStaking(true);
-      await stakeSolx(parseUnits(amount), parseInt(duration), rewardToken);
-    } finally {
-      setIsStaking(false);
+      if (selectedToken === 'SOLX') {
+        await stakeSolx(parsedAmount);
+      } else {
+        await stakeMockx(parsedAmount);
+      }
       setAmount('');
+    } catch (error) {
+      console.error('Staking failed:', error);
     }
   };
 
-  const handleStakeMockx = async () => {
+  const handleUnstake = async () => {
     try {
-      setIsStaking(true);
-      await stakeMockx(parseUnits(amount), parseInt(duration), rewardToken);
-    } finally {
-      setIsStaking(false);
-      setAmount('');
+      if (selectedToken === 'SOLX') {
+        await unstakeSolx(userSolxStake?.stakedAmount || new BN(0));
+      } else {
+        await unstakeMockx(userMockxStake?.stakedAmount || new BN(0));
+      }
+    } catch (error) {
+      console.error('Unstaking failed:', error);
     }
   };
+
+  const handleClaimRewards = async () => {
+    try {
+      if (selectedToken === 'SOLX') {
+        await claimSolxRewards();
+      } else {
+        await claimMockxRewards();
+      }
+    } catch (error) {
+      console.error('Claiming rewards failed:', error);
+    }
+  };
+
+  const currentStake = selectedToken === 'SOLX' ? userSolxStake : userMockxStake;
+  const pool = selectedToken === 'SOLX' ? solxPool : mockxPool;
 
   return (
-    <div className="p-4 space-y-8">
-      <div className="grid grid-cols-2 gap-8">
-        {/* SOLX Staking Test Panel */}
-        <div className="p-6 border rounded-lg space-y-4">
-          <h2 className="text-2xl font-bold mb-4">Test SOLX Staking</h2>
-          
-          <div>
-            <p>Pool Total Staked: {solxPool.totalStaked.toString()}</p>
-            <p>Your Stake: {userSolxStake?.stakedAmount.toString() || '0'}</p>
-            <p>Your Rewards: {userSolxStake?.rewardsEarned.toString() || '0'}</p>
-          </div>
-
-          <div className="space-y-2">
-            <Input
-              type="number"
-              placeholder="Amount to stake"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-            />
-            <Select value={duration} onValueChange={setDuration}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select duration" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="7">7 days</SelectItem>
-                <SelectItem value="30">30 days</SelectItem>
-                <SelectItem value="90">90 days</SelectItem>
-                <SelectItem value="180">180 days</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={rewardToken} onValueChange={setRewardToken}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select reward token" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="SOLX">SOLX</SelectItem>
-                <SelectItem value="MOCKX">MOCKX</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-x-2">
-            <Button 
-              onClick={handleStakeSolx}
-              disabled={!amount || isStaking || !wallet.connected}
-            >
-              Stake SOLX
-            </Button>
-            <Button
-              onClick={() => unstakeSolx(userSolxStake?.stakedAmount || 0n)}
-              disabled={!userSolxStake?.stakedAmount || isStaking || !wallet.connected}
-              variant="outline"
-            >
-              Unstake All
-            </Button>
-            <Button
-              onClick={claimSolxRewards}
-              disabled={!userSolxStake?.rewardsEarned || isStaking || !wallet.connected}
-              variant="secondary"
-            >
-              Claim Rewards
-            </Button>
-          </div>
-        </div>
-
-        {/* MOCKX Staking Test Panel */}
-        <div className="p-6 border rounded-lg space-y-4">
-          <h2 className="text-2xl font-bold mb-4">Test MOCKX Staking</h2>
-          
-          <div>
-            <p>Pool Total Staked: {mockxPool.totalStaked.toString()}</p>
-            <p>Your Stake: {userMockxStake?.stakedAmount.toString() || '0'}</p>
-            <p>Your Rewards: {userMockxStake?.rewardsEarned.toString() || '0'}</p>
-          </div>
-
-          <div className="space-y-2">
-            <Input
-              type="number"
-              placeholder="Amount to stake"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-            />
-            <Select value={duration} onValueChange={setDuration}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select duration" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="7">7 days</SelectItem>
-                <SelectItem value="30">30 days</SelectItem>
-                <SelectItem value="90">90 days</SelectItem>
-                <SelectItem value="180">180 days</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={rewardToken} onValueChange={setRewardToken}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select reward token" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="SOLX">SOLX</SelectItem>
-                <SelectItem value="MOCKX">MOCKX</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-x-2">
-            <Button 
-              onClick={handleStakeMockx}
-              disabled={!amount || isStaking || !wallet.connected}
-            >
-              Stake MOCKX
-            </Button>
-            <Button
-              onClick={() => unstakeMockx(userMockxStake?.stakedAmount || 0n)}
-              disabled={!userMockxStake?.stakedAmount || isStaking || !wallet.connected}
-              variant="outline"
-            >
-              Unstake All
-            </Button>
-            <Button
-              onClick={claimMockxRewards}
-              disabled={!userMockxStake?.rewardsEarned || isStaking || !wallet.connected}
-              variant="secondary"
-            >
-              Claim Rewards
-            </Button>
-          </div>
-        </div>
+    <div className="space-y-6 p-6 bg-card rounded-lg shadow-lg">
+      <div className="space-y-2">
+        <h2 className="text-2xl font-bold">Test Staking</h2>
+        <p className="text-muted-foreground">
+          Test staking functionality with {selectedToken}
+        </p>
       </div>
 
-      {!wallet.connected && (
-        <div className="text-center text-red-500">
-          Please connect your wallet to test staking functionality
+      <div className="space-y-4">
+        <Select
+          value={selectedToken}
+          onValueChange={setSelectedToken}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select token" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="SOLX">SOLX</SelectItem>
+            <SelectItem value="MOCKX">MOCKX</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Amount</label>
+          <Input
+            type="number"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            placeholder="Enter amount to stake"
+          />
         </div>
-      )}
+
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Duration (days)</label>
+          <Select
+            value={duration}
+            onValueChange={setDuration}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select duration" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="30">30 days</SelectItem>
+              <SelectItem value="60">60 days</SelectItem>
+              <SelectItem value="90">90 days</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Button
+            className="w-full"
+            onClick={handleStake}
+            disabled={!amount || !wallet.publicKey}
+          >
+            Stake {selectedToken}
+          </Button>
+
+          <Button
+            className="w-full"
+            onClick={handleUnstake}
+            disabled={!currentStake?.stakedAmount || !wallet.publicKey}
+          >
+            Unstake {selectedToken}
+          </Button>
+
+          <Button
+            className="w-full"
+            onClick={handleClaimRewards}
+            disabled={!currentStake?.rewardsEarned || !wallet.publicKey}
+          >
+            Claim Rewards
+          </Button>
+        </div>
+
+        {currentStake && (
+          <div className="space-y-2 p-4 bg-muted rounded-lg">
+            <h3 className="font-medium">Your Stake</h3>
+            <p>Staked: {currentStake.stakedAmount.toString()} {selectedToken}</p>
+            <p>Rewards: {currentStake.rewardsEarned.toString()} {selectedToken}</p>
+            <p>Duration: {currentStake.stakingDuration} days</p>
+          </div>
+        )}
+
+        <div className="space-y-2 p-4 bg-muted rounded-lg">
+          <h3 className="font-medium">Pool Info</h3>
+          <p>APY: {pool.apy}%</p>
+          <p>Total Staked: {pool.totalStaked.toString()} {selectedToken}</p>
+        </div>
+      </div>
     </div>
   );
 }

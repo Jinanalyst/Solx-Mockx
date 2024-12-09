@@ -1,6 +1,6 @@
 import { Connection, PublicKey, Transaction, TransactionInstruction } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
-import { ethers } from 'ethers';
+import BN from 'bn.js';
 
 export const STAKING_PROGRAM_ID = new PublicKey('DSwpgjMvXhtGn6BsbqmacdBZyfLj6jSWf3HJpdJtmg6N');
 
@@ -9,14 +9,14 @@ export interface StakingPool {
   tokenMint: PublicKey;
   rewardMint: PublicKey;
   apy: number;
-  totalStaked: number;
-  minStakeAmount: number;
-  maxStakeAmount: number;
+  totalStaked: BN;
+  minStakeAmount: BN;
+  maxStakeAmount: BN;
 }
 
 export interface UserStake {
-  stakedAmount: number;
-  rewardsEarned: number;
+  stakedAmount: BN;
+  rewardsEarned: BN;
   stakingDuration: number;
   startTime: number;
   rewardToken: string;
@@ -26,7 +26,7 @@ export const createStakeInstruction = (
   connection: Connection,
   userAccount: PublicKey,
   poolAddress: PublicKey,
-  amount: number,
+  amount: BN,
   duration: number,
   rewardType: string
 ): TransactionInstruction => {
@@ -74,21 +74,20 @@ export const createClaimRewardsInstruction = (
 };
 
 export const calculatePendingRewards = (
-  stakeAmount: number,
+  stakeAmount: BN,
   stakeDuration: number,
   apy: number,
   elapsedTime: number
-): number => {
-  const annualReward = stakeAmount * (apy / 100);
-  const dailyReward = annualReward / 365;
-  const daysElapsed = elapsedTime / (24 * 60 * 60 * 1000); // Convert ms to days
-  return dailyReward * daysElapsed;
+): BN => {
+  const annualRate = new BN(apy).mul(new BN(1e4));
+  const timeRatio = new BN(elapsedTime).mul(new BN(1e4)).div(new BN(365 * 24 * 60 * 60));
+  return stakeAmount.mul(annualRate).mul(timeRatio).div(new BN(1e8));
 };
 
-export const formatStakeAmount = (amount: number): string => {
-  return ethers.formatUnits(amount.toString(), 9); // Assuming 9 decimals for SPL tokens
+export const formatStakeAmount = (amount: BN): string => {
+  return amount.toString();
 };
 
-export const parseStakeAmount = (amount: string): number => {
-  return parseInt(ethers.parseUnits(amount, 9).toString());
+export const parseStakeAmount = (amount: string): BN => {
+  return new BN(amount).mul(new BN(1e9)); // Convert to lamports (9 decimals)
 };
