@@ -3,6 +3,14 @@ import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import BN from 'bn.js';
 
 export const STAKING_PROGRAM_ID = new PublicKey('DSwpgjMvXhtGn6BsbqmacdBZyfLj6jSWf3HJpdJtmg6N');
+export const PLATFORM_FEE_WALLET = new PublicKey('6zkf4DviZZkpWVEh53MrcQV6vGXGpESnNXgAvU6KpBUH');
+
+// Staking fee configuration
+export const STAKING_FEES = {
+  stakingFee: 0.001,  // 0.1% fee for staking
+  unstakingFee: 0.002, // 0.2% fee for early unstaking
+  claimFee: 0.0005    // 0.05% fee for claiming rewards
+};
 
 export interface StakingPool {
   poolAddress: PublicKey;
@@ -22,56 +30,81 @@ export interface UserStake {
   rewardToken: string;
 }
 
-export const createStakeInstruction = (
+export async function createStakeInstruction(
   connection: Connection,
   userAccount: PublicKey,
   poolAddress: PublicKey,
   amount: BN,
   duration: number,
   rewardType: string
-): TransactionInstruction => {
-  return new TransactionInstruction({
+): Promise<TransactionInstruction> {
+  const feeAmount = amount.muln(STAKING_FEES.stakingFee);
+  
+  const instruction = new TransactionInstruction({
     keys: [
       { pubkey: userAccount, isSigner: true, isWritable: true },
       { pubkey: poolAddress, isSigner: false, isWritable: true },
+      { pubkey: PLATFORM_FEE_WALLET, isSigner: false, isWritable: true },
       { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
     ],
     programId: STAKING_PROGRAM_ID,
-    data: Buffer.from([]) // Add your instruction data here
+    data: Buffer.from([
+      /* instruction data */
+    ]),
   });
+
+  return instruction;
 };
 
-export const createUnstakeInstruction = (
+export async function createUnstakeInstruction(
   connection: Connection,
   userAccount: PublicKey,
-  poolAddress: PublicKey
-): TransactionInstruction => {
-  return new TransactionInstruction({
-    keys: [
-      { pubkey: userAccount, isSigner: true, isWritable: true },
-      { pubkey: poolAddress, isSigner: false, isWritable: true },
-      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-    ],
-    programId: STAKING_PROGRAM_ID,
-    data: Buffer.from([]) // Add your instruction data here
-  });
-};
+  poolAddress: PublicKey,
+  amount: BN,
+  isEarlyUnstake: boolean
+): Promise<TransactionInstruction> {
+  const feeRate = isEarlyUnstake ? STAKING_FEES.unstakingFee : 0;
+  const feeAmount = amount.muln(feeRate);
 
-export const createClaimRewardsInstruction = (
-  connection: Connection,
-  userAccount: PublicKey,
-  poolAddress: PublicKey
-): TransactionInstruction => {
-  return new TransactionInstruction({
+  const instruction = new TransactionInstruction({
     keys: [
       { pubkey: userAccount, isSigner: true, isWritable: true },
       { pubkey: poolAddress, isSigner: false, isWritable: true },
+      { pubkey: PLATFORM_FEE_WALLET, isSigner: false, isWritable: true },
       { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
     ],
     programId: STAKING_PROGRAM_ID,
-    data: Buffer.from([]) // Add your instruction data here
+    data: Buffer.from([
+      /* instruction data */
+    ]),
   });
-};
+
+  return instruction;
+}
+
+export async function createClaimRewardsInstruction(
+  connection: Connection,
+  userAccount: PublicKey,
+  poolAddress: PublicKey,
+  rewardAmount: BN
+): Promise<TransactionInstruction> {
+  const feeAmount = rewardAmount.muln(STAKING_FEES.claimFee);
+
+  const instruction = new TransactionInstruction({
+    keys: [
+      { pubkey: userAccount, isSigner: true, isWritable: true },
+      { pubkey: poolAddress, isSigner: false, isWritable: true },
+      { pubkey: PLATFORM_FEE_WALLET, isSigner: false, isWritable: true },
+      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+    ],
+    programId: STAKING_PROGRAM_ID,
+    data: Buffer.from([
+      /* instruction data */
+    ]),
+  });
+
+  return instruction;
+}
 
 export const calculatePendingRewards = (
   stakeAmount: BN,

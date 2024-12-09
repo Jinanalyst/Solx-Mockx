@@ -173,6 +173,9 @@ const StakingPool: FC<StakingPoolProps> = ({
   );
 };
 
+export { StakingPool };
+export type { UserStake, StakingPoolProps };
+
 export const StakingPoolContainer: FC<{ onError: (error: unknown) => void }> = ({ onError }) => {
   const {
     solxPool,
