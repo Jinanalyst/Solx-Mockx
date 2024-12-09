@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import TradingViewWidget from '@/components/TradingViewWidget';
 import { TradingPair, getTradingPairs } from '@/utils/tradingView';
+import { TradingOrders } from '@/components/trading/TradingOrders';
 
 export default function MockTradingPage() {
   const [selectedPair, setSelectedPair] = useState<string>('BTCUSDT');
@@ -33,15 +34,22 @@ export default function MockTradingPage() {
         </select>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-grow">
-        {/* Chart Section */}
-        <div className="lg:col-span-2 bg-gray-800 rounded-lg p-4" style={{ height: '600px' }}>
-          <TradingViewWidget 
-            symbol={selectedPair}
-            theme="dark"
-            interval="15"
-            height="100%"
-          />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2 space-y-4">
+          {/* Chart Section */}
+          <div className="bg-gray-800 rounded-lg p-4" style={{ height: '500px' }}>
+            <TradingViewWidget 
+              symbol={selectedPair}
+              theme="dark"
+              interval="15"
+              height="100%"
+            />
+          </div>
+
+          {/* Trading Orders Section */}
+          <div className="bg-gray-800 rounded-lg overflow-hidden">
+            <TradingOrders />
+          </div>
         </div>
 
         {/* Trading Interface */}

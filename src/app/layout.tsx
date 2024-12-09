@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { Providers } from './providers';
-import { WalletProvider } from '@/components/solana/WalletProvider';
+import { WalletProvider } from '@/contexts/WalletContext';
+import { MockBalanceProvider } from '@/contexts/MockBalanceContext';
 import { Navbar } from '@/components/Navbar';
 import { ThemeProvider } from '../contexts/ThemeContext';
 import { setInitialTheme } from './theme-script';
@@ -29,10 +30,12 @@ export default function RootLayout({
         <ThemeProvider>
           <Providers>
             <WalletProvider>
-              <div className="min-h-screen bg-background">
-                <Navbar />
-                <main>{children}</main>
-              </div>
+              <MockBalanceProvider>
+                <div className="min-h-screen bg-background">
+                  <Navbar />
+                  <main>{children}</main>
+                </div>
+              </MockBalanceProvider>
             </WalletProvider>
           </Providers>
         </ThemeProvider>

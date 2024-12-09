@@ -5,6 +5,7 @@ import { TradingViewWidget } from '@/components/trading/TradingViewWidget';
 import { OrderBook } from '@/components/trading/OrderBook';
 import { TradePanel } from '@/components/trading/TradePanel';
 import { RecentTrades } from '@/components/trading/RecentTrades';
+import { TradingOrders } from '@/components/trading/TradingOrders';
 
 function TradeContent() {
   const [selectedTimeframe, setSelectedTimeframe] = useState('30m');
@@ -56,10 +57,15 @@ function TradeContent() {
         {/* Left Section - Chart and Order Book */}
         <div className="flex flex-col flex-1 min-w-0 border-r border-gray-800">
           {/* Chart */}
-          <div className="h-[65%] border-b border-gray-800">
+          <div className="h-[50%] border-b border-gray-800">
             <TradingViewWidget symbol="BTCUSDT" />
           </div>
           
+          {/* Trading Orders Section */}
+          <div className="h-[25%] border-b border-gray-800">
+            <TradingOrders />
+          </div>
+
           {/* Bottom Section */}
           <div className="flex flex-1 min-h-0">
             <OrderBook className="flex-1 border-r border-gray-800" />
