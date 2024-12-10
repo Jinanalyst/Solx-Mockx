@@ -31,17 +31,35 @@ export function AddLiquidity({
   const [showSettings, setShowSettings] = useState(false);
 
   const handleAmount1Change = (value: string) => {
+    const numValue = parseFloat(value);
+    if (isNaN(numValue) || numValue < 0) return;
     setAmount1(value);
     // Calculate token2 amount based on exchange rate
-    const calculatedAmount2 = value ? (parseFloat(value) * parseFloat(exchangeRate)).toString() : '';
+    const calculatedAmount2 = value ? (numValue * parseFloat(exchangeRate)).toFixed(6) : '';
     setAmount2(calculatedAmount2);
   };
 
   const handleAmount2Change = (value: string) => {
+    const numValue = parseFloat(value);
+    if (isNaN(numValue) || numValue < 0) return;
     setAmount2(value);
     // Calculate token1 amount based on exchange rate
-    const calculatedAmount1 = value ? (parseFloat(value) / parseFloat(exchangeRate)).toString() : '';
+    const calculatedAmount1 = value ? (numValue / parseFloat(exchangeRate)).toFixed(6) : '';
     setAmount1(calculatedAmount1);
+  };
+
+  const handleMaxToken1 = () => {
+    const balance = parseFloat(token1.balance);
+    if (!isNaN(balance)) {
+      handleAmount1Change(balance.toString());
+    }
+  };
+
+  const handleMaxToken2 = () => {
+    const balance = parseFloat(token2.balance);
+    if (!isNaN(balance)) {
+      handleAmount2Change(balance.toString());
+    }
   };
 
   return (
@@ -116,13 +134,18 @@ export function AddLiquidity({
             </div>
             <input
               type="number"
+              min="0"
+              step="any"
               value={amount1}
               onChange={(e) => handleAmount1Change(e.target.value)}
               className="flex-1 bg-transparent text-right text-xl focus:outline-none"
               placeholder="0.0"
             />
           </div>
-          <button className="mt-2 rounded bg-primary/10 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/20">
+          <button
+            onClick={handleMaxToken1}
+            className="mt-2 rounded bg-primary/10 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/20"
+          >
             MAX
           </button>
         </div>
@@ -152,13 +175,18 @@ export function AddLiquidity({
             </div>
             <input
               type="number"
+              min="0"
+              step="any"
               value={amount2}
               onChange={(e) => handleAmount2Change(e.target.value)}
               className="flex-1 bg-transparent text-right text-xl focus:outline-none"
               placeholder="0.0"
             />
           </div>
-          <button className="mt-2 rounded bg-primary/10 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/20">
+          <button
+            onClick={handleMaxToken2}
+            className="mt-2 rounded bg-primary/10 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/20"
+          >
             MAX
           </button>
         </div>

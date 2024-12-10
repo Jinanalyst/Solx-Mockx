@@ -56,12 +56,16 @@ export function AdvancedTrading({ pair }: AdvancedTradingProps) {
   const [indexPrice, setIndexPrice] = useState<number | null>(null);
   const [bestBid, setBestBid] = useState<number | null>(null);
   const [bestAsk, setBestAsk] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Percentage buttons for quick amount selection
   const percentages = [25, 50, 75, 100];
 
   useEffect(() => {
     const fetchMarketData = async () => {
+      setIsLoading(true);
+      setError(null);
       try {
         // Fetch current prices
         const tokenPrice = await fetchTokenPrice(pair.baseToken.address);
@@ -73,12 +77,12 @@ export function AdvancedTrading({ pair }: AdvancedTradingProps) {
 
         // Fetch orderbook for best bid/ask
         const orderbook = await fetchTokenOrderbook(pair.baseToken.address);
-        if (orderbook) {
-          if (orderbook.bids.length > 0) setBestBid(orderbook.bids[0].price);
-          if (orderbook.asks.length > 0) setBestAsk(orderbook.asks[0].price);
-        }
+        if (orderbook?.bids?.length > 0) setBestBid(orderbook.bids[0].price);
+        if (orderbook?.asks?.length > 0) setBestAsk(orderbook.asks[0].price);
       } catch (error) {
-        console.error('Error fetching market data:', error);
+        setError(error instanceof Error ? error.message : 'Failed to fetch market data');
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -90,40 +94,53 @@ export function AdvancedTrading({ pair }: AdvancedTradingProps) {
   // Calculate total when price or amount changes
   useEffect(() => {
     if (price && amount) {
-      const calculatedTotal = parseFloat(price) * parseFloat(amount);
-      setTotal(calculatedTotal.toFixed(6));
+      const priceNum = parseFloat(price);
+      const amountNum = parseFloat(amount);
+      if (!isNaN(priceNum) && !isNaN(amountNum)) {
+        const calculatedTotal = priceNum * amountNum;
+        setTotal(calculatedTotal.toFixed(6));
+      }
     } else {
       setTotal('');
     }
   }, [price, amount]);
 
   const handlePercentageClick = (percentage: number) => {
-    if (availableBalance && markPrice) {
-      const maxAmount = side === 'buy' 
-        ? availableBalance / markPrice 
-        : availableBalance;
-      const newAmount = (maxAmount * percentage / 100).toFixed(6);
-      setAmount(newAmount);
-    }
+    if (!availableBalance || !markPrice) return;
+    
+    const maxAmount = side === 'buy' 
+      ? availableBalance / (markPrice || 0)
+      : availableBalance;
+    const newAmount = (maxAmount * percentage / 100).toFixed(6);
+    setAmount(newAmount);
   };
 
   const handleSubmit = async () => {
     if (!publicKey || !signTransaction) {
-      console.error('Wallet not connected');
+      setError('Wallet not connected');
       return;
     }
 
+    if (!price || !amount || parseFloat(amount) <= 0 || parseFloat(price) <= 0) {
+      setError('Invalid price or amount');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
     try {
       // Implement order submission logic here
-      console.log('Submitting order:', {
+      await submitOrder({
         side,
-        price,
-        amount,
-        total,
+        price: parseFloat(price),
+        amount: parseFloat(amount),
+        total: parseFloat(total),
         settings,
       });
     } catch (error) {
-      console.error('Error submitting order:', error);
+      setError(error instanceof Error ? error.message : 'Failed to submit order');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -318,19 +335,25 @@ export function AdvancedTrading({ pair }: AdvancedTradingProps) {
         </div>
       </div>
 
+      {error && (
+        <div className="mb-4 p-3 bg-red-500/10 text-red-500 rounded-lg">
+          {error}
+        </div>
+      )}
+
       {/* Submit button */}
       <button
         onClick={handleSubmit}
-        disabled={!publicKey || !amount || (!price && settings.type !== 'market')}
+        disabled={isLoading || !publicKey}
         className={`w-full py-3 px-4 rounded-lg font-medium ${
-          side === 'buy'
+          isLoading
+            ? 'bg-muted cursor-not-allowed'
+            : side === 'buy'
             ? 'bg-green-500 hover:bg-green-600 text-white'
             : 'bg-red-500 hover:bg-red-600 text-white'
-        } disabled:opacity-50 disabled:cursor-not-allowed`}
+        }`}
       >
-        {publicKey
-          ? `${side === 'buy' ? 'Buy' : 'Sell'} ${pair.baseToken.symbol}`
-          : 'Connect Wallet'}
+        {isLoading ? 'Processing...' : `Place ${side.toUpperCase()} Order`}
       </button>
     </div>
   );
