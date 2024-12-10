@@ -86,6 +86,23 @@ export interface MockUser {
 }
 
 export interface MockTradingContextType {
+  positions: MockPosition[];
   balances: MockBalance[];
+  orders: MockOrder[];
+  trades: MockTrade[];
+  orderBook: OrderBook | undefined;
+  performance: MockUser['performance'];
+  selectedMarket: string;
+  currentPrice: number;
+  placeOrder: (
+    pair: string,
+    side: OrderSide,
+    type: OrderType,
+    amount: number,
+    price: number,
+    leverage?: number
+  ) => Promise<MockOrder>;
+  closePosition: (positionId: string) => Promise<void>;
+  refreshData: () => void;
   updateBalance: (symbol: string, amount: number, type: 'add' | 'subtract', balanceType: 'free' | 'locked') => void;
 }
