@@ -4,29 +4,14 @@ import { PublicKey } from '@solana/web3.js';
 import BN from 'bn.js';
 import { usePerpetual } from '../../contexts/PerpetualContext';
 import { TradeDirection, OrderParams } from '../../perpetuals/types';
-import {
-  Box,
-  Button,
-  Flex,
-  Input,
-  Select,
-  Stat,
-  StatLabel,
-  StatNumber,
-  StatHelpText,
-  Tab,
-  TabList,
-  TabPanel,
-  TabPanels,
-  Tabs,
-  Text,
-  useToast,
-  Grid,
-  Stack,
-  FormControl,
-  FormLabel,
-  FormHelperText,
-} from '@chakra-ui/react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useToast } from '@/components/ui/use-toast';
+import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 
 export function PerpetualTrading() {
   const { publicKey } = useWallet();
@@ -44,7 +29,7 @@ export function PerpetualTrading() {
   const [leverage, setLeverage] = useState('1');
   const [direction, setDirection] = useState<TradeDirection>(TradeDirection.Long);
   const [collateral, setCollateral] = useState('');
-  const toast = useToast();
+  const { toast } = useToast();
 
   const formattedBalance = useMemo(() => {
     if (!balance) return '0.00';
@@ -54,52 +39,29 @@ export function PerpetualTrading() {
     });
   }, [balance]);
 
-  useEffect(() => {
-    if (error) {
-      toast({
-        title: 'Error',
-        description: error,
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-      });
-    }
-  }, [error, toast]);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!publicKey) return;
 
     try {
       const params: OrderParams = {
-        size: new BN(parseFloat(size) * 1e6),
-        price: currentPrice!,
-        leverage: parseInt(leverage),
         direction,
-        collateral: new BN(parseFloat(collateral) * 1e9),
+        size: new BN(parseFloat(size) * 1e6),
+        leverage: parseInt(leverage),
+        collateral: new BN(parseFloat(collateral) * 1e6),
       };
 
       await openPosition(params);
-      
       toast({
         title: 'Success',
         description: 'Position opened successfully',
-        status: 'success',
-        duration: 5000,
-        isClosable: true,
       });
-
-      // Reset form
-      setSize('');
-      setLeverage('1');
-      setCollateral('');
     } catch (err) {
+      console.error('Error opening position:', err);
       toast({
         title: 'Error',
-        description: err instanceof Error ? err.message : 'Failed to open position',
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
+        description: 'Failed to open position. Please try again.',
+        variant: 'destructive',
       });
     }
   };
@@ -112,95 +74,146 @@ export function PerpetualTrading() {
   };
 
   return (
-    <Box p={4}>
-      <Flex justify="space-between" align="center" mb={6}>
-        <Text fontSize="2xl" fontWeight="bold">Perpetual Futures Trading</Text>
-        <Stat textAlign="right">
-          <StatLabel>Available Balance</StatLabel>
-          <StatNumber>${formattedBalance} USDT</StatNumber>
-        </Stat>
-      </Flex>
+    <Card>
+      <CardContent className="p-6">
+        <div className="space-y-6">
+          {/* Account Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">Account Balance</p>
+              <p className="text-2xl font-bold">${formattedBalance}</p>
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">Current Price</p>
+              <p className="text-2xl font-bold">
+                ${currentPrice ? (currentPrice.toNumber() / 1e6).toFixed(2) : '0.00'}
+              </p>
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">Funding Rate</p>
+              <p className="text-2xl font-bold">
+                {fundingRate ? (fundingRate.toNumber() / 1e6 * 100).toFixed(4) : '0.00'}%
+              </p>
+            </div>
+          </div>
 
-      <Grid templateColumns="repeat(2, 1fr)" gap={6}>
-        <Box>
-          <Tabs variant="enclosed">
-            <TabList>
-              <Tab>Long</Tab>
-              <Tab>Short</Tab>
-            </TabList>
-            <TabPanels>
-              <TabPanel>
-                <form onSubmit={handleSubmit}>
-                  <Stack spacing={4}>
-                    <FormControl>
-                      <FormLabel>Size (SOL)</FormLabel>
-                      <Input
-                        type="number"
-                        value={size}
-                        onChange={(e) => setSize(e.target.value)}
-                        placeholder="Enter size"
-                      />
-                    </FormControl>
-                    
-                    <FormControl>
-                      <FormLabel>Leverage (1-20x)</FormLabel>
-                      <Input
-                        type="number"
-                        value={leverage}
-                        onChange={(e) => setLeverage(e.target.value)}
-                        min="1"
-                        max="20"
-                      />
-                    </FormControl>
+          {/* Trading Interface */}
+          <Tabs defaultValue="market" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="market">Market</TabsTrigger>
+              <TabsTrigger value="limit">Limit</TabsTrigger>
+            </TabsList>
 
-                    <FormControl>
-                      <FormLabel>Required Collateral (USDT)</FormLabel>
-                      <Input
-                        value={calculateRequiredCollateral()}
-                        isReadOnly
-                      />
-                      <FormHelperText>
-                        {Number(leverage)}x leverage requires {(100 / Number(leverage)).toFixed(2)}% collateral
-                      </FormHelperText>
-                    </FormControl>
+            <TabsContent value="market" className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {/* Direction Selection */}
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    variant={direction === TradeDirection.Long ? "default" : "outline"}
+                    className={cn(
+                      "w-full",
+                      direction === TradeDirection.Long && "bg-green-500 hover:bg-green-600"
+                    )}
+                    onClick={() => setDirection(TradeDirection.Long)}
+                  >
+                    Long
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={direction === TradeDirection.Short ? "default" : "outline"}
+                    className={cn(
+                      "w-full",
+                      direction === TradeDirection.Short && "bg-red-500 hover:bg-red-600"
+                    )}
+                    onClick={() => setDirection(TradeDirection.Short)}
+                  >
+                    Short
+                  </Button>
+                </div>
 
-                    <Button
-                      type="submit"
-                      colorScheme={direction === TradeDirection.Long ? 'green' : 'red'}
-                      isLoading={loading}
-                      isDisabled={!publicKey || !size || Number(size) <= 0}
-                    >
-                      {direction === TradeDirection.Long ? 'Long' : 'Short'} SOL/USDT
-                    </Button>
-                  </Stack>
-                </form>
-              </TabPanel>
-              <TabPanel>
-                {/* Similar form for Short position */}
-              </TabPanel>
-            </TabPanels>
+                {/* Size Input */}
+                <div className="space-y-2">
+                  <Label htmlFor="size">Size (USD)</Label>
+                  <Input
+                    id="size"
+                    type="number"
+                    value={size}
+                    onChange={(e) => setSize(e.target.value)}
+                    placeholder="Enter position size"
+                    min="0"
+                    step="0.01"
+                    required
+                  />
+                </div>
+
+                {/* Leverage Selection */}
+                <div className="space-y-2">
+                  <Label htmlFor="leverage">Leverage</Label>
+                  <Select value={leverage} onValueChange={setLeverage}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select leverage" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[1, 2, 3, 5, 10].map((value) => (
+                        <SelectItem key={value} value={value.toString()}>
+                          {value}x
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Required Collateral */}
+                <div className="space-y-2">
+                  <Label>Required Collateral (USDT)</Label>
+                  <Input
+                    value={calculateRequiredCollateral()}
+                    readOnly
+                    disabled
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    {Number(leverage)}x leverage requires {(100 / Number(leverage)).toFixed(2)}% collateral
+                  </p>
+                </div>
+
+                {/* Collateral Input */}
+                <div className="space-y-2">
+                  <Label htmlFor="collateral">Collateral (USD)</Label>
+                  <Input
+                    id="collateral"
+                    type="number"
+                    value={collateral}
+                    onChange={(e) => setCollateral(e.target.value)}
+                    placeholder="Enter collateral amount"
+                    min="0"
+                    step="0.01"
+                    required
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    Available: ${formattedBalance}
+                  </p>
+                </div>
+
+                {/* Submit Button */}
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={loading || !publicKey}
+                >
+                  {loading ? 'Processing...' : 'Place Order'}
+                </Button>
+              </form>
+            </TabsContent>
+
+            <TabsContent value="limit" className="space-y-4">
+              <div className="flex items-center justify-center h-40">
+                <p className="text-muted-foreground">Limit orders coming soon</p>
+              </div>
+            </TabsContent>
           </Tabs>
-        </Box>
-
-        <Box>
-          <Stat mb={4}>
-            <StatLabel>Current SOL Price</StatLabel>
-            <StatNumber>
-              ${currentPrice ? (currentPrice.toNumber() / 1e9).toFixed(2) : '0.00'}
-            </StatNumber>
-            <StatHelpText>
-              Funding Rate: {fundingRate ? (fundingRate.toNumber() / 1e6 * 100).toFixed(4) : '0.0000'}%
-            </StatHelpText>
-          </Stat>
-
-          {/* Position list */}
-          {positions.map(position => (
-            <Box key={position.id}>
-              {/* PositionCard component */}
-            </Box>
-          ))}
-        </Box>
-      </Grid>
-    </Box>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
