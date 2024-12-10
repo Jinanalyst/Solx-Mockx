@@ -50,19 +50,8 @@ function StakingContent() {
 }
 
 export default function StakingPage() {
-  const { toast } = useToast();
-
-  const onError = (error: unknown) => {
-    const handledError = handleError(error, 'Staking Page');
-    toast({
-      title: 'Error',
-      description: handledError.message,
-      variant: 'destructive',
-    });
-  };
-
   return (
-    <PageLayout onError={onError}>
+    <PageLayout>
       <StakingContent />
     </PageLayout>
   );
