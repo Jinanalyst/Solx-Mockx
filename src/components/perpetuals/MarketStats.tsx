@@ -1,17 +1,9 @@
 import React from 'react';
-import {
-  Box,
-  Grid,
-  Stat,
-  StatLabel,
-  StatNumber,
-  StatHelpText,
-  StatArrow,
-  Divider,
-  Text,
-} from '@chakra-ui/react';
 import { usePerpetual } from '../../contexts/PerpetualContext';
 import BN from 'bn.js';
+import { Card, CardContent } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
 
 export function MarketStats() {
   const { marketState, currentPrice, fundingRate } = usePerpetual();
@@ -33,95 +25,106 @@ export function MarketStats() {
   const priceChange = calculatePriceChange();
 
   return (
-    <Box p={4} borderRadius="lg" bg="white" shadow="sm">
-      <Text fontSize="xl" mb={4}>Market Statistics</Text>
-      
-      <Grid templateColumns="repeat(3, 1fr)" gap={6}>
-        {/* Price Information */}
-        <Stat>
-          <StatLabel>SOL-PERP Price</StatLabel>
-          <StatNumber>{formatUSD(currentPrice)}</StatNumber>
-          <StatHelpText>
-            <StatArrow type={priceChange.isPositive ? 'increase' : 'decrease'} />
-            {formatPercentage(priceChange.change)} (24h)
-          </StatHelpText>
-        </Stat>
+    <Card>
+      <CardContent className="p-6">
+        <h2 className="text-xl font-semibold mb-4">Market Statistics</h2>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Price Information */}
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">SOL-PERP Price</p>
+            <p className="text-2xl font-bold">{formatUSD(currentPrice)}</p>
+            <div className="flex items-center space-x-1">
+              <span className={cn(
+                "text-sm",
+                priceChange.isPositive ? "text-green-500" : "text-red-500"
+              )}>
+                {priceChange.isPositive ? "↑" : "↓"}
+                {formatPercentage(priceChange.change)}
+              </span>
+              <span className="text-sm text-muted-foreground">(24h)</span>
+            </div>
+          </div>
 
-        {/* Funding Rate */}
-        <Stat>
-          <StatLabel>Funding Rate (8h)</StatLabel>
-          <StatNumber>
-            {fundingRate ? formatPercentage(fundingRate.toNumber() / 1e6) : '-.---%'}
-          </StatNumber>
-          <StatHelpText>
-            Next funding in: {/* Add countdown timer */}
-          </StatHelpText>
-        </Stat>
+          {/* Funding Rate */}
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">Funding Rate (8h)</p>
+            <p className="text-2xl font-bold">
+              {fundingRate ? formatPercentage(fundingRate.toNumber() / 1e6) : '-.---%'}
+            </p>
+            <p className="text-sm text-muted-foreground">Next funding in: {/* Add countdown timer */}</p>
+          </div>
 
-        {/* Trading Volume */}
-        <Stat>
-          <StatLabel>24h Volume</StatLabel>
-          <StatNumber>
-            {marketState ? formatUSD(marketState.totalLongPositions.add(marketState.totalShortPositions)) : '$-.--'}
-          </StatNumber>
-        </Stat>
-      </Grid>
+          {/* Trading Volume */}
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">24h Volume</p>
+            <p className="text-2xl font-bold">
+              {marketState ? formatUSD(marketState.totalLongPositions.add(marketState.totalShortPositions)) : '$-.--'}
+            </p>
+          </div>
+        </div>
 
-      <Divider my={4} />
+        <Separator className="my-6" />
 
-      <Grid templateColumns="repeat(4, 1fr)" gap={6}>
-        {/* Market Details */}
-        <Stat>
-          <StatLabel>Open Interest (Long)</StatLabel>
-          <StatNumber>
-            {marketState ? formatUSD(marketState.totalLongPositions) : '$-.--'}
-          </StatNumber>
-        </Stat>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          {/* Open Interest */}
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">Open Interest (Long)</p>
+            <p className="text-2xl font-bold">
+              {marketState ? formatUSD(marketState.totalLongPositions) : '$-.--'}
+            </p>
+          </div>
 
-        <Stat>
-          <StatLabel>Open Interest (Short)</StatLabel>
-          <StatNumber>
-            {marketState ? formatUSD(marketState.totalShortPositions) : '$-.--'}
-          </StatNumber>
-        </Stat>
+          {/* Open Interest */}
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">Open Interest (Short)</p>
+            <p className="text-2xl font-bold">
+              {marketState ? formatUSD(marketState.totalShortPositions) : '$-.--'}
+            </p>
+          </div>
 
-        <Stat>
-          <StatLabel>Insurance Fund</StatLabel>
-          <StatNumber>
-            {marketState ? formatUSD(marketState.insuranceFund) : '$-.--'}
-          </StatNumber>
-        </Stat>
+          {/* Insurance Fund */}
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">Insurance Fund</p>
+            <p className="text-2xl font-bold">
+              {marketState ? formatUSD(marketState.insuranceFund) : '$-.--'}
+            </p>
+          </div>
 
-        <Stat>
-          <StatLabel>Max Leverage</StatLabel>
-          <StatNumber>
-            {marketState ? `${marketState.maxLeverage}x` : '--x'}
-          </StatNumber>
-        </Stat>
-      </Grid>
+          {/* Max Leverage */}
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">Max Leverage</p>
+            <p className="text-2xl font-bold">
+              {marketState ? `${marketState.maxLeverage}x` : '--x'}
+            </p>
+          </div>
+        </div>
 
-      <Divider my={4} />
+        <Separator className="my-6" />
 
-      <Grid templateColumns="repeat(3, 1fr)" gap={6}>
-        {/* Fee Information */}
-        <Box>
-          <Text fontWeight="bold" mb={2}>Trading Fees</Text>
-          <Text>Maker: 0.02%</Text>
-          <Text>Taker: 0.05%</Text>
-        </Box>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Fee Information */}
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">Trading Fees</p>
+            <p className="text-sm">Maker: 0.02%</p>
+            <p className="text-sm">Taker: 0.05%</p>
+          </div>
 
-        <Box>
-          <Text fontWeight="bold" mb={2}>Liquidation</Text>
-          <Text>Maintenance Margin: {marketState ? formatPercentage(marketState.maintenanceMargin) : '-.--'}</Text>
-          <Text>Liquidation Fee: {marketState ? formatPercentage(marketState.liquidationFee) : '-.--'}</Text>
-        </Box>
+          {/* Liquidation */}
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">Liquidation</p>
+            <p className="text-sm">Maintenance Margin: {marketState ? formatPercentage(marketState.maintenanceMargin) : '-.--'}</p>
+            <p className="text-sm">Liquidation Fee: {marketState ? formatPercentage(marketState.liquidationFee) : '-.--'}</p>
+          </div>
 
-        <Box>
-          <Text fontWeight="bold" mb={2}>Min/Max Position</Text>
-          <Text>Min Collateral: {marketState ? formatUSD(marketState.minCollateral) : '$-.--'}</Text>
-          <Text>Max Leverage: {marketState ? `${marketState.maxLeverage}x` : '--x'}</Text>
-        </Box>
-      </Grid>
-    </Box>
+          {/* Min/Max Position */}
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">Min/Max Position</p>
+            <p className="text-sm">Min Collateral: {marketState ? formatUSD(marketState.minCollateral) : '$-.--'}</p>
+            <p className="text-sm">Max Leverage: {marketState ? `${marketState.maxLeverage}x` : '--x'}</p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
