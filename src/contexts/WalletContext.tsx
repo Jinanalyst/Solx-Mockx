@@ -1,10 +1,11 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { useConnection, useWallet as useSolanaWallet } from '@solana/wallet-adapter-react';
 import { WalletName } from '@solana/wallet-adapter-base';
 import { Connection, PublicKey, Transaction } from '@solana/web3.js';
 import { TokenInfo } from '@solana/spl-token-registry';
+import { toast } from '@/components/ui/use-toast';
 
 interface TokenBalance {
   mint: string;
@@ -66,29 +67,16 @@ interface WalletContextType {
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 const RPC_ENDPOINTS = [
-  'https://solana-mainnet.g.alchemy.com/v2/keGv4NmfazY3NAt3SWylGQb_xg1iEtfn',
+  process.env.NEXT_PUBLIC_RPC_ENDPOINT,
   'https://rpc.ankr.com/solana',
   'https://api.mainnet-beta.solana.com',
 ].filter(Boolean) as string[];
 
-// Configuration for RPC connection
 const connectionConfig = {
-  commitment: 'confirmed',
-  wsEndpoint: 'wss://solana-mainnet.g.alchemy.com/v2/keGv4NmfazY3NAt3SWylGQb_xg1iEtfn',
+  commitment: 'confirmed' as const,
+  wsEndpoint: process.env.NEXT_PUBLIC_WS_ENDPOINT,
   confirmTransactionInitialTimeout: 60000,
 };
-
-// Mock data for development
-const MOCK_BALANCES: TokenBalance[] = [
-  {
-    mint: 'SOL',
-    symbol: 'SOL',
-    balance: 0,
-    decimals: 9,
-    usdValue: 0,
-    logoURI: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png',
-  }
-];
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   const { publicKey, connected, select, disconnect: solanaDisconnect } = useSolanaWallet();
@@ -98,34 +86,32 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [balances, setBalances] = useState<TokenBalance[]>([]);
   const [isLoadingBalances, setIsLoadingBalances] = useState(false);
   const [currentEndpointIndex, setCurrentEndpointIndex] = useState(0);
+  const [isInitialized, setIsInitialized] = useState(false);
 
-  const rotateEndpoint = () => {
+  const rotateEndpoint = useCallback(() => {
     const nextIndex = (currentEndpointIndex + 1) % RPC_ENDPOINTS.length;
     setCurrentEndpointIndex(nextIndex);
     return RPC_ENDPOINTS[nextIndex];
-  };
-
-  const createConnection = (endpoint: string) => {
-    console.log('Creating connection to:', endpoint);
-    const conn = new Connection(endpoint, connectionConfig);
-    
-    // Test the connection
-    conn.getVersion().catch(error => {
-      console.warn('Connection test failed:', error);
-      rotateEndpoint();
-    });
-    
-    return conn;
-  };
-
-  useEffect(() => {
-    const conn = createConnection(RPC_ENDPOINTS[currentEndpointIndex]);
-    setConnection(conn);
   }, [currentEndpointIndex]);
 
-  const retryWithFallback = async <T,>(operation: (conn: Connection) => Promise<T>): Promise<T> => {
+  const createConnection = useCallback((endpoint: string) => {
+    if (!endpoint) {
+      console.error('Invalid RPC endpoint');
+      return null;
+    }
+
+    try {
+      const conn = new Connection(endpoint, connectionConfig);
+      return conn;
+    } catch (error) {
+      console.error('Failed to create connection:', error);
+      return null;
+    }
+  }, []);
+
+  const retryWithFallback = useCallback(async <T,>(operation: (conn: Connection) => Promise<T>): Promise<T> => {
     let lastError;
-    const maxRetries = RPC_ENDPOINTS.length * 2; // Try each endpoint twice
+    const maxRetries = RPC_ENDPOINTS.length * 2;
     
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
@@ -137,7 +123,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         lastError = error;
         console.error(`Attempt ${attempt + 1} failed:`, error?.message || error);
         
-        // Check for various error conditions that require endpoint rotation
         if (
           error?.message?.includes('403') ||
           error?.message?.includes('429') ||
@@ -146,36 +131,24 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           error?.message?.includes('timeout')
         ) {
           const newEndpoint = rotateEndpoint();
-          console.log(`Switching to fallback RPC endpoint: ${newEndpoint}`);
-          // Add a small delay before retrying
+          const newConnection = createConnection(newEndpoint);
+          if (newConnection) {
+            setConnection(newConnection);
+          }
           await new Promise(resolve => setTimeout(resolve, 1000));
           continue;
         }
         throw error;
       }
     }
-    console.error('All RPC endpoints failed');
     throw lastError;
-  };
+  }, [connection, rotateEndpoint, createConnection]);
 
-  useEffect(() => {
-    if (publicKey) {
-      retryWithFallback((conn) => conn.getBalance(publicKey))
-        .then((bal) => {
-          setBalance(bal / 1e9);
-        })
-        .catch((error) => {
-          console.error('Failed to fetch balance:', error);
-        });
-    }
-  }, [publicKey]);
-
-  const getTokenAccountInfo = async (
+  const getTokenAccountInfo = useCallback(async (
     connection: Connection,
     walletAddress: PublicKey
   ): Promise<TokenAccount[]> => {
     try {
-      console.log('Fetching token accounts for:', walletAddress.toString());
       const response = await retryWithFallback((conn) =>
         conn.getParsedTokenAccountsByOwner(walletAddress, {
           programId: new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'),
@@ -196,25 +169,74 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       console.error('Error fetching token accounts:', error);
       return [];
     }
-  };
+  }, [retryWithFallback]);
 
-  const connect = async () => {
+  const connect = useCallback(async () => {
     try {
+      if (connected) {
+        throw new Error('Wallet is already connected');
+      }
       await select('Phantom' as WalletName);
     } catch (error) {
-      console.error('Failed to connect wallet:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to connect wallet';
+      toast({
+        title: 'Connection Error',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+      throw error;
     }
-  };
+  }, [connected, select]);
 
-  const disconnect = async () => {
+  const disconnect = useCallback(async () => {
     try {
+      if (!connected) {
+        throw new Error('Wallet is not connected');
+      }
       await solanaDisconnect();
+      setBalances([]);
+      setBalance(0);
     } catch (error) {
-      console.error('Failed to disconnect wallet:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to disconnect wallet';
+      toast({
+        title: 'Disconnect Error',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+      throw error;
     }
-  };
+  }, [connected, solanaDisconnect]);
 
-  const refreshBalances = async () => {
+  const fetchTokenList = useCallback(async (): Promise<TokenInfo[]> => {
+    try {
+      const response = await fetch('https://token.jup.ag/all');
+      if (!response.ok) {
+        throw new Error('Failed to fetch token list');
+      }
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Error fetching token list:', error);
+      return [];
+    }
+  }, []);
+
+  const fetchTokenPrice = useCallback(async (symbol: string): Promise<number> => {
+    try {
+      if (!symbol) return 0;
+      const response = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}USDT`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch token price');
+      }
+      const data = await response.json();
+      return parseFloat(data.price) || 0;
+    } catch (error) {
+      console.error(`Error fetching price for ${symbol}:`, error);
+      return 0;
+    }
+  }, []);
+
+  const refreshBalances = useCallback(async () => {
     if (!connection || !publicKey) {
       setBalances([]);
       return;
@@ -222,32 +244,39 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
     setIsLoadingBalances(true);
     try {
-      // Fetch token accounts
       const tokenAccounts = await getTokenAccountInfo(connection, new PublicKey(publicKey));
       const tokenList = await fetchTokenList();
       
-      // Create a map of token info for quick lookup
+      if (!tokenList || tokenList.length === 0) {
+        throw new Error('Failed to fetch token list');
+      }
+      
       const tokenInfoMap = new Map(tokenList.map(token => [token.address, token]));
       
-      // Process token accounts
-      const tokenBalances = await Promise.all(
+      const tokenBalances = await Promise.allSettled(
         tokenAccounts.map(async (account) => {
           const tokenInfo = account.account.data.parsed.info;
+          if (!tokenInfo) return null;
+
           const mintAddress = tokenInfo.mint;
           const tokenMetadata = tokenInfoMap.get(mintAddress);
           
-          if (!tokenMetadata) {
-            return null;
-          }
+          if (!tokenMetadata) return null;
 
           try {
-            const price = await fetchTokenPrice(tokenMetadata.symbol);
-            const balance = Number(tokenInfo.tokenAmount.uiAmountString);
+            const [price, balance] = await Promise.all([
+              fetchTokenPrice(tokenMetadata.symbol),
+              Number(tokenInfo.tokenAmount.uiAmountString)
+            ]);
+            
+            if (isNaN(price) || isNaN(balance)) {
+              throw new Error(`Invalid price or balance for ${tokenMetadata.symbol}`);
+            }
             
             return {
               mint: mintAddress,
               symbol: tokenMetadata.symbol,
-              balance: balance,
+              balance,
               decimals: tokenInfo.tokenAmount.decimals,
               usdValue: balance * price,
               logoURI: tokenMetadata.logoURI
@@ -259,47 +288,89 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         })
       );
 
-      // Filter out null values and sort by USD value
       const validBalances = tokenBalances
-        .filter((balance): balance is TokenBalance => balance !== null && balance.balance > 0)
+        .filter((result): result is PromiseFulfilledResult<TokenBalance> => 
+          result.status === 'fulfilled' && result.value !== null && result.value.balance > 0
+        )
+        .map(result => result.value)
         .sort((a, b) => b.usdValue - a.usdValue);
 
       setBalances(validBalances);
     } catch (error) {
-      console.error('Error refreshing balances:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to refresh balances';
+      toast({
+        title: 'Balance Refresh Error',
+        description: errorMessage,
+        variant: 'destructive',
+      });
       setBalances([]);
     } finally {
       setIsLoadingBalances(false);
     }
-  };
+  }, [connection, publicKey, getTokenAccountInfo, fetchTokenList, fetchTokenPrice]);
 
-  const getTokenBalance = (mintAddress: string) => {
+  const getTokenBalance = useCallback((mintAddress: string) => {
     return balances.find(b => b.mint === mintAddress);
-  };
+  }, [balances]);
 
+  // Initialize connection
+  useEffect(() => {
+    if (!isInitialized && RPC_ENDPOINTS[currentEndpointIndex]) {
+      const conn = createConnection(RPC_ENDPOINTS[currentEndpointIndex]);
+      if (conn) {
+        setConnection(conn);
+        setIsInitialized(true);
+      } else {
+        const newEndpoint = rotateEndpoint();
+        const newConn = createConnection(newEndpoint);
+        if (newConn) {
+          setConnection(newConn);
+          setIsInitialized(true);
+        }
+      }
+    }
+  }, [currentEndpointIndex, isInitialized, createConnection, rotateEndpoint]);
+
+  // Update balance when connection or wallet changes
+  useEffect(() => {
+    if (publicKey && connection) {
+      retryWithFallback((conn) => conn.getBalance(publicKey))
+        .then((bal) => {
+          setBalance(bal / 1e9);
+        })
+        .catch((error) => {
+          console.error('Failed to fetch balance:', error);
+          setBalance(0);
+        });
+    } else {
+      setBalance(0);
+    }
+  }, [publicKey, connection, retryWithFallback]);
+
+  // Refresh balances when wallet connection changes
   useEffect(() => {
     if (connected) {
       refreshBalances();
     } else {
       setBalances([]);
     }
-  }, [connected, publicKey]);
+  }, [connected, refreshBalances]);
+
+  const contextValue = {
+    connected,
+    publicKey: publicKey?.toBase58() || null,
+    balance,
+    connect,
+    disconnect,
+    connection,
+    balances,
+    isLoadingBalances,
+    refreshBalances,
+    getTokenBalance,
+  };
 
   return (
-    <WalletContext.Provider
-      value={{
-        connected,
-        publicKey: publicKey?.toBase58() || null,
-        balance,
-        connect,
-        disconnect,
-        connection,
-        balances,
-        isLoadingBalances,
-        refreshBalances,
-        getTokenBalance,
-      }}
-    >
+    <WalletContext.Provider value={contextValue}>
       {children}
     </WalletContext.Provider>
   );
@@ -311,46 +382,4 @@ export function useWallet() {
     throw new Error('useWallet must be used within a WalletProvider');
   }
   return context;
-}
-
-// Helper functions
-async function fetchTokenList(): Promise<TokenInfo[]> {
-  try {
-    const response = await fetch('https://cdn.jsdelivr.net/gh/solana-labs/token-list@main/src/tokens/solana.tokenlist.json');
-    if (!response.ok) {
-      throw new Error('Failed to fetch token list');
-    }
-    const data = await response.json();
-    return Array.isArray(data.tokens) ? data.tokens : [];
-  } catch (error) {
-    console.error('Error fetching token list:', error);
-    return [];
-  }
-}
-
-async function fetchTokenPrice(symbol: string): Promise<number> {
-  if (!symbol) return 0;
-  
-  try {
-    // Handle SOL separately
-    if (symbol.toUpperCase() === 'SOL') {
-      const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd');
-      if (!response.ok) {
-        throw new Error('Failed to fetch SOL price');
-      }
-      const data = await response.json();
-      return data.solana?.usd || 0;
-    }
-
-    // For other tokens
-    const response = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${symbol.toLowerCase()}&vs_currencies=usd`);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch price for ${symbol}`);
-    }
-    const data = await response.json();
-    return data[symbol.toLowerCase()]?.usd || 0;
-  } catch (error) {
-    console.error(`Error fetching token price for ${symbol}:`, error);
-    return 0;
-  }
 }
