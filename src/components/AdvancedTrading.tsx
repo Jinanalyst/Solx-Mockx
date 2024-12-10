@@ -58,18 +58,61 @@ export function AdvancedTrading({ pair }: AdvancedTradingProps) {
   const [bestAsk, setBestAsk] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [lastPriceUpdateId, setLastPriceUpdateId] = useState(0);
 
   // Percentage buttons for quick amount selection
   const percentages = [25, 50, 75, 100];
 
+  const validateInputs = () => {
+    if (!publicKey) {
+      setError('Please connect your wallet');
+      return false;
+    }
+
+    if (settings.type !== 'market') {
+      if (!price || parseFloat(price) <= 0) {
+        setError('Invalid price');
+        return false;
+      }
+    }
+
+    if (!amount || parseFloat(amount) <= 0) {
+      setError('Invalid amount');
+      return false;
+    }
+
+    if (settings.type === 'stopLimit' || settings.type === 'stopMarket') {
+      if (!settings.stopPrice || settings.stopPrice <= 0) {
+        setError('Invalid stop price');
+        return false;
+      }
+    }
+
+    const totalValue = parseFloat(total);
+    if (isNaN(totalValue) || totalValue <= 0) {
+      setError('Invalid total value');
+      return false;
+    }
+
+    if (side === 'buy' && totalValue > availableBalance) {
+      setError('Insufficient balance');
+      return false;
+    }
+
+    return true;
+  };
+
   useEffect(() => {
-    const fetchMarketData = async () => {
+    const updateId = lastPriceUpdateId + 1;
+    setLastPriceUpdateId(updateId);
+
+    const fetchPriceData = async () => {
       setIsLoading(true);
-      setError(null);
       try {
         // Fetch current prices
         const tokenPrice = await fetchTokenPrice(pair.baseToken.address);
-        if (tokenPrice) {
+        if (tokenPrice && updateId === lastPriceUpdateId) {
           setMarkPrice(tokenPrice);
           setLastPrice(tokenPrice);
           setIndexPrice(tokenPrice);
@@ -77,33 +120,71 @@ export function AdvancedTrading({ pair }: AdvancedTradingProps) {
 
         // Fetch orderbook for best bid/ask
         const orderbook = await fetchTokenOrderbook(pair.baseToken.address);
-        if (orderbook?.bids?.length > 0) setBestBid(orderbook.bids[0].price);
-        if (orderbook?.asks?.length > 0) setBestAsk(orderbook.asks[0].price);
-      } catch (error) {
-        setError(error instanceof Error ? error.message : 'Failed to fetch market data');
+        if (orderbook && updateId === lastPriceUpdateId) {
+          if (orderbook.bids?.length > 0) setBestBid(orderbook.bids[0].price);
+          if (orderbook.asks?.length > 0) setBestAsk(orderbook.asks[0].price);
+        }
+      } catch (err) {
+        if (updateId === lastPriceUpdateId) {
+          setError(err instanceof Error ? err.message : 'Failed to fetch market data');
+        }
       } finally {
-        setIsLoading(false);
+        if (updateId === lastPriceUpdateId) {
+          setIsLoading(false);
+        }
       }
     };
 
-    fetchMarketData();
-    const interval = setInterval(fetchMarketData, 3000);
+    fetchPriceData();
+    const interval = setInterval(fetchPriceData, 3000);
     return () => clearInterval(interval);
   }, [pair.baseToken.address]);
 
-  // Calculate total when price or amount changes
-  useEffect(() => {
-    if (price && amount) {
-      const priceNum = parseFloat(price);
-      const amountNum = parseFloat(amount);
-      if (!isNaN(priceNum) && !isNaN(amountNum)) {
-        const calculatedTotal = priceNum * amountNum;
-        setTotal(calculatedTotal.toFixed(6));
+  const handlePriceChange = (value: string) => {
+    if (value === '' || /^\d*\.?\d*$/.test(value)) {
+      setPrice(value);
+      if (value && amount) {
+        const total = (parseFloat(value) * parseFloat(amount)).toFixed(6);
+        setTotal(total);
       }
-    } else {
-      setTotal('');
     }
-  }, [price, amount]);
+  };
+
+  const handleAmountChange = (value: string) => {
+    if (value === '' || /^\d*\.?\d*$/.test(value)) {
+      setAmount(value);
+      if (value && price) {
+        const total = (parseFloat(value) * parseFloat(price)).toFixed(6);
+        setTotal(total);
+      }
+    }
+  };
+
+  const handleSubmit = async () => {
+    setError(null);
+    if (!validateInputs()) return;
+
+    setIsSubmitting(true);
+    try {
+      // Implement order submission logic here
+      await submitOrder({
+        side,
+        price: settings.type === 'market' ? markPrice : parseFloat(price),
+        amount: parseFloat(amount),
+        total: parseFloat(total),
+        settings,
+      });
+
+      // Reset form
+      setAmount('');
+      setPrice('');
+      setTotal('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to submit order');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const handlePercentageClick = (percentage: number) => {
     if (!availableBalance || !markPrice) return;
@@ -113,35 +194,6 @@ export function AdvancedTrading({ pair }: AdvancedTradingProps) {
       : availableBalance;
     const newAmount = (maxAmount * percentage / 100).toFixed(6);
     setAmount(newAmount);
-  };
-
-  const handleSubmit = async () => {
-    if (!publicKey || !signTransaction) {
-      setError('Wallet not connected');
-      return;
-    }
-
-    if (!price || !amount || parseFloat(amount) <= 0 || parseFloat(price) <= 0) {
-      setError('Invalid price or amount');
-      return;
-    }
-
-    setIsLoading(true);
-    setError(null);
-    try {
-      // Implement order submission logic here
-      await submitOrder({
-        side,
-        price: parseFloat(price),
-        amount: parseFloat(amount),
-        total: parseFloat(total),
-        settings,
-      });
-    } catch (error) {
-      setError(error instanceof Error ? error.message : 'Failed to submit order');
-    } finally {
-      setIsLoading(false);
-    }
   };
 
   return (
@@ -195,12 +247,13 @@ export function AdvancedTrading({ pair }: AdvancedTradingProps) {
           </label>
           <div className="relative">
             <input
-              type="number"
+              type="text"
               value={price}
-              onChange={(e) => setPrice(e.target.value)}
+              onChange={(e) => handlePriceChange(e.target.value)}
               className="w-full bg-muted p-2 rounded-lg border border-border focus:outline-none focus:ring-2 focus:ring-primary"
               placeholder="0.00"
-              step="0.000001"
+              pattern="\d*\.?\d*"
+              disabled={isSubmitting}
             />
             <span className="absolute right-2 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
               USDC
@@ -238,12 +291,13 @@ export function AdvancedTrading({ pair }: AdvancedTradingProps) {
         </label>
         <div className="relative">
           <input
-            type="number"
+            type="text"
             value={amount}
-            onChange={(e) => setAmount(e.target.value)}
+            onChange={(e) => handleAmountChange(e.target.value)}
             className="w-full bg-muted p-2 rounded-lg border border-border focus:outline-none focus:ring-2 focus:ring-primary"
             placeholder="0.00"
-            step="0.000001"
+            pattern="\d*\.?\d*"
+            disabled={isSubmitting}
           />
           <span className="absolute right-2 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
             {pair.baseToken.symbol}
@@ -271,9 +325,10 @@ export function AdvancedTrading({ pair }: AdvancedTradingProps) {
         </label>
         <div className="relative">
           <input
-            type="number"
+            type="text"
             value={total}
             readOnly
+            disabled
             className="w-full bg-muted p-2 rounded-lg border border-border focus:outline-none"
             placeholder="0.00"
           />
@@ -336,7 +391,7 @@ export function AdvancedTrading({ pair }: AdvancedTradingProps) {
       </div>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-500/10 text-red-500 rounded-lg">
+        <div className="mb-4 p-3 bg-red-500/10 text-red-500 rounded-lg text-sm">
           {error}
         </div>
       )}
@@ -344,16 +399,23 @@ export function AdvancedTrading({ pair }: AdvancedTradingProps) {
       {/* Submit button */}
       <button
         onClick={handleSubmit}
-        disabled={isLoading || !publicKey}
+        disabled={isSubmitting || !publicKey}
         className={`w-full py-3 px-4 rounded-lg font-medium ${
-          isLoading
+          isSubmitting
             ? 'bg-muted cursor-not-allowed'
             : side === 'buy'
             ? 'bg-green-500 hover:bg-green-600 text-white'
             : 'bg-red-500 hover:bg-red-600 text-white'
         }`}
       >
-        {isLoading ? 'Processing...' : `Place ${side.toUpperCase()} Order`}
+        {isSubmitting ? (
+          <div className="flex items-center justify-center">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+            Processing...
+          </div>
+        ) : (
+          `Place ${side.toUpperCase()} Order`
+        )}
       </button>
     </div>
   );

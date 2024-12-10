@@ -28,36 +28,81 @@ export function SwapForm({ pair }: SwapFormProps) {
   const [slippage, setSlippage] = useState('0.5');
   const [isLoading, setIsLoading] = useState(false);
   const [isSwapReversed, setIsSwapReversed] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [lastRequestId, setLastRequestId] = useState<number>(0);
+
+  const validateSlippage = (value: string): boolean => {
+    const num = parseFloat(value);
+    return !isNaN(num) && num > 0 && num <= 100;
+  };
 
   useEffect(() => {
+    const requestId = lastRequestId + 1;
+    setLastRequestId(requestId);
+
     const computeToAmount = async () => {
-      if (!fromAmount || !pair.baseToken.address) return;
+      if (!fromAmount || !pair.baseToken.address) {
+        setToAmount('');
+        return;
+      }
+
+      setIsLoading(true);
+      setError(null);
 
       try {
         const inputMint = isSwapReversed ? pair.baseToken.address : TOKENS.USDC.mint.toString();
         const outputMint = isSwapReversed ? TOKENS.USDC.mint.toString() : pair.baseToken.address;
         const inputAmount = Number(fromAmount) * (10 ** (isSwapReversed ? 9 : TOKENS.USDC.decimals));
 
+        if (isNaN(inputAmount)) {
+          throw new Error('Invalid input amount');
+        }
+
+        const slippageValue = parseFloat(slippage);
+        if (!validateSlippage(slippage)) {
+          throw new Error('Invalid slippage value (0-100%)');
+        }
+
         const quoteResponse = await axios.get('https://quote-api.jup.ag/v6/quote', {
           params: {
             inputMint,
             outputMint,
             amount: inputAmount.toString(),
-            slippageBps: Number(slippage) * 100,
+            slippageBps: slippageValue * 100,
           },
         });
 
-        if (quoteResponse.data && quoteResponse.data.quoteResponse) {
+        // Check if this is still the latest request
+        if (requestId !== lastRequestId) return;
+
+        if (quoteResponse.data?.quoteResponse) {
           const outAmount = Number(quoteResponse.data.quoteResponse.outAmount) / (10 ** (isSwapReversed ? TOKENS.USDC.decimals : 9));
           setToAmount(outAmount.toFixed(6));
+        } else {
+          throw new Error('Invalid quote response');
         }
-      } catch (error) {
-        console.error('Error computing swap amount:', error);
+      } catch (err) {
+        // Only set error if this is still the latest request
+        if (requestId === lastRequestId) {
+          setError(err instanceof Error ? err.message : 'Failed to compute swap amount');
+          setToAmount('');
+        }
+      } finally {
+        // Only update loading state if this is still the latest request
+        if (requestId === lastRequestId) {
+          setIsLoading(false);
+        }
       }
     };
 
     computeToAmount();
   }, [fromAmount, pair.baseToken.address, isSwapReversed, slippage]);
+
+  const handleSlippageChange = (value: string) => {
+    if (value === '' || validateSlippage(value)) {
+      setSlippage(value);
+    }
+  };
 
   const handleSwap = async () => {
     if (!publicKey || !signTransaction || !fromAmount || !pair.baseToken.address) {
@@ -183,24 +228,29 @@ export function SwapForm({ pair }: SwapFormProps) {
 
           <div>
             <label className="mb-2 block text-sm text-muted-foreground">
-              Slippage Tolerance
+              Slippage Tolerance (%)
             </label>
-            <div className="grid grid-cols-3 gap-2">
-              {slippageOptions.map((option) => (
-                <button
-                  key={option.value}
-                  onClick={() => setSlippage(option.value)}
-                  className={`rounded-lg border border-border p-2 text-sm font-medium transition-colors ${
-                    slippage === option.value
-                      ? 'border-primary bg-primary text-white'
-                      : 'hover:border-primary hover:bg-primary/5'
-                  }`}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
+            <input
+              type="number"
+              value={slippage}
+              onChange={(e) => handleSlippageChange(e.target.value)}
+              className="w-20 mt-1 px-2 py-1 text-sm bg-background border border-input rounded-md"
+              min="0"
+              max="100"
+              step="0.1"
+            />
+            {parseFloat(slippage) > 5 && (
+              <p className="mt-1 text-sm text-yellow-500">
+                High slippage tolerance. Your transaction may be frontrun.
+              </p>
+            )}
           </div>
+
+          {error && (
+            <div className="mt-2 p-3 bg-red-500/10 text-red-500 rounded-lg text-sm">
+              {error}
+            </div>
+          )}
 
           <div className="rounded-lg bg-background p-4">
             <div className="mb-2 flex justify-between text-sm">

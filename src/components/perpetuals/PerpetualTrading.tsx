@@ -31,6 +31,9 @@ export function PerpetualTrading() {
   const [collateral, setCollateral] = useState('');
   const { toast } = useToast();
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorState, setErrorState] = useState<string | null>(null);
+
   const formattedBalance = useMemo(() => {
     if (!balance) return '0.00';
     return (balance.toNumber() / 1e6).toLocaleString('en-US', {
@@ -39,16 +42,49 @@ export function PerpetualTrading() {
     });
   }, [balance]);
 
+  const validateInputs = () => {
+    if (!publicKey) {
+      setErrorState('Please connect your wallet');
+      return false;
+    }
+    if (!size || parseFloat(size) <= 0) {
+      setErrorState('Invalid position size');
+      return false;
+    }
+    if (!leverage || parseInt(leverage) <= 0) {
+      setErrorState('Invalid leverage');
+      return false;
+    }
+    if (!collateral || parseFloat(collateral) <= 0) {
+      setErrorState('Invalid collateral amount');
+      return false;
+    }
+    const collateralNum = parseFloat(collateral);
+    const balanceNum = balance ? balance.toNumber() / 1e6 : 0;
+    if (collateralNum > balanceNum) {
+      setErrorState('Insufficient balance');
+      return false;
+    }
+    return true;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!publicKey) return;
+    setErrorState(null);
+    
+    if (!validateInputs()) return;
 
+    setIsSubmitting(true);
     try {
+      const sizeNum = parseFloat(size);
+      const leverageNum = parseInt(leverage);
+      const collateralNum = parseFloat(collateral);
+
       const params: OrderParams = {
         direction,
-        size: new BN(parseFloat(size) * 1e6),
-        leverage: parseInt(leverage),
-        collateral: new BN(parseFloat(collateral) * 1e6),
+        size: new BN(sizeNum * 1e6),
+        leverage: leverageNum,
+        collateral: new BN(collateralNum * 1e6),
       };
 
       await openPosition(params);
@@ -56,13 +92,48 @@ export function PerpetualTrading() {
         title: 'Success',
         description: 'Position opened successfully',
       });
+      // Reset form
+      setSize('');
+      setCollateral('');
     } catch (err) {
       console.error('Error opening position:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to open position';
+      setErrorState(errorMessage);
       toast({
         title: 'Error',
-        description: 'Failed to open position. Please try again.',
+        description: errorMessage,
         variant: 'destructive',
       });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSizeChange = (value: string) => {
+    if (value === '' || /^\d*\.?\d*$/.test(value)) {
+      setSize(value);
+      if (value && leverage) {
+        const requiredCollateral = (parseFloat(value) / parseInt(leverage)).toFixed(6);
+        setCollateral(requiredCollateral);
+      }
+    }
+  };
+
+  const handleLeverageChange = (value: string) => {
+    setLeverage(value);
+    if (size && value) {
+      const requiredCollateral = (parseFloat(size) / parseInt(value)).toFixed(6);
+      setCollateral(requiredCollateral);
+    }
+  };
+
+  const handleCollateralChange = (value: string) => {
+    if (value === '' || /^\d*\.?\d*$/.test(value)) {
+      setCollateral(value);
+      if (value && leverage) {
+        const newSize = (parseFloat(value) * parseInt(leverage)).toFixed(6);
+        setSize(newSize);
+      }
     }
   };
 
@@ -137,20 +208,24 @@ export function PerpetualTrading() {
                   <Label htmlFor="size">Size (USD)</Label>
                   <Input
                     id="size"
-                    type="number"
+                    type="text"
                     value={size}
-                    onChange={(e) => setSize(e.target.value)}
+                    onChange={(e) => handleSizeChange(e.target.value)}
                     placeholder="Enter position size"
-                    min="0"
-                    step="0.01"
-                    required
+                    className="flex-1"
+                    pattern="\d*\.?\d*"
+                    disabled={isSubmitting}
                   />
                 </div>
 
                 {/* Leverage Selection */}
                 <div className="space-y-2">
                   <Label htmlFor="leverage">Leverage</Label>
-                  <Select value={leverage} onValueChange={setLeverage}>
+                  <Select 
+                    value={leverage} 
+                    onValueChange={handleLeverageChange}
+                    disabled={isSubmitting}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Select leverage" />
                     </SelectTrigger>
@@ -182,26 +257,41 @@ export function PerpetualTrading() {
                   <Label htmlFor="collateral">Collateral (USD)</Label>
                   <Input
                     id="collateral"
-                    type="number"
+                    type="text"
                     value={collateral}
-                    onChange={(e) => setCollateral(e.target.value)}
+                    onChange={(e) => handleCollateralChange(e.target.value)}
                     placeholder="Enter collateral amount"
-                    min="0"
-                    step="0.01"
-                    required
+                    className="flex-1"
+                    pattern="\d*\.?\d*"
+                    disabled={isSubmitting}
                   />
                   <p className="text-sm text-muted-foreground">
                     Available: ${formattedBalance}
                   </p>
                 </div>
 
-                {/* Submit Button */}
+                {errorState && (
+                  <div className="mt-4 p-3 bg-red-500/10 text-red-500 rounded-lg text-sm">
+                    {errorState}
+                  </div>
+                )}
+
                 <Button
                   type="submit"
-                  className="w-full"
-                  disabled={loading || !publicKey}
+                  className={cn(
+                    "w-full mt-4",
+                    direction === TradeDirection.Long ? "bg-green-500 hover:bg-green-600" : "bg-red-500 hover:bg-red-600"
+                  )}
+                  disabled={isSubmitting || !publicKey}
                 >
-                  {loading ? 'Processing...' : 'Place Order'}
+                  {isSubmitting ? (
+                    <div className="flex items-center justify-center">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Processing...
+                    </div>
+                  ) : (
+                    `Open ${direction === TradeDirection.Long ? 'Long' : 'Short'} Position`
+                  )}
                 </Button>
               </form>
             </TabsContent>

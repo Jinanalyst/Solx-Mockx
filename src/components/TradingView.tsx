@@ -40,6 +40,7 @@ export function TradingView({ pair = 'SOL' }: ChartContainerProps) {
   const [timeframe, setTimeframe] = useState<string>('1h');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [activeIndicators, setActiveIndicators] = useState<Set<string>>(new Set(['EMA']));
+  const [error, setError] = useState<string | null>(null);
 
   const timeframes = [
     { label: '5m', value: '5' },
@@ -57,7 +58,82 @@ export function TradingView({ pair = 'SOL' }: ChartContainerProps) {
     { label: 'BB', value: 'BB', color: '#9966FF' },
   ];
 
+  useEffect(() => {
+    if (!chartContainerRef.current) return;
+
+    const handleResize = () => {
+      if (chartRef.current) {
+        chartRef.current.applyOptions({
+          width: chartContainerRef.current?.clientWidth || 600,
+          height: chartContainerRef.current?.clientHeight || 400,
+        });
+      }
+    };
+
+    const chart = createChart(chartContainerRef.current, {
+      width: chartContainerRef.current.clientWidth,
+      height: chartContainerRef.current.clientHeight,
+      layout: {
+        background: { type: ColorType.Solid, color: 'transparent' },
+        textColor: '#D9D9D9',
+      },
+      grid: {
+        vertLines: { color: 'rgba(42, 46, 57, 0.5)' },
+        horzLines: { color: 'rgba(42, 46, 57, 0.5)' },
+      },
+    });
+
+    chartRef.current = chart;
+    const candlestickSeries = chart.addCandlestickSeries();
+    candlestickSeriesRef.current = candlestickSeries;
+    const volumeSeries = chart.addHistogramSeries({
+      priceFormat: {
+        type: 'volume',
+      },
+      priceScaleId: '',
+    });
+    volumeSeriesRef.current = volumeSeries;
+
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (chartRef.current) {
+        chartRef.current.remove();
+        chartRef.current = null;
+      }
+      candlestickSeriesRef.current = null;
+      volumeSeriesRef.current = null;
+      indicatorsRef.current = {};
+    };
+  }, []);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const data = await fetchTokenOHLC(pair, timeframe);
+        if (!candlestickSeriesRef.current || !volumeSeriesRef.current) return;
+
+        candlestickSeriesRef.current.setData(data.ohlc);
+        volumeSeriesRef.current.setData(data.volume);
+        updateIndicators(data.ohlc);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch chart data');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+    const interval = setInterval(fetchData, 30000);
+    return () => clearInterval(interval);
+  }, [pair, timeframe]);
+
   const updateIndicators = (data: CandlestickData[]) => {
+    if (!chartRef.current || !data.length) return;
+
     // Remove existing indicators
     Object.values(indicatorsRef.current).forEach(indicator => {
       if (chartRef.current) {
@@ -66,13 +142,12 @@ export function TradingView({ pair = 'SOL' }: ChartContainerProps) {
     });
     indicatorsRef.current = {};
 
-    if (!chartRef.current || !data.length) return;
-
-    activeIndicators.forEach(indicatorName => {
-      switch (indicatorName) {
-        case 'EMA':
-          const ema = calculateEMA(data, 20);
-          if (chartRef.current) {
+    try {
+      activeIndicators.forEach(indicatorName => {
+        switch (indicatorName) {
+          case 'EMA':
+            const ema = calculateEMA(data, 20);
+            if (!chartRef.current) return;
             const emaSeries = chartRef.current.addLineSeries({
               color: '#2962FF',
               lineWidth: 2,
@@ -85,12 +160,11 @@ export function TradingView({ pair = 'SOL' }: ChartContainerProps) {
               visible: true,
               color: '#2962FF'
             };
-          }
-          break;
+            break;
 
-        case 'SMA':
-          const sma = calculateSMA(data, 20);
-          if (chartRef.current) {
+          case 'SMA':
+            const sma = calculateSMA(data, 20);
+            if (!chartRef.current) return;
             const smaSeries = chartRef.current.addLineSeries({
               color: '#FF6B6B',
               lineWidth: 2,
@@ -103,12 +177,11 @@ export function TradingView({ pair = 'SOL' }: ChartContainerProps) {
               visible: true,
               color: '#FF6B6B'
             };
-          }
-          break;
+            break;
 
-        case 'RSI':
-          const rsi = calculateRSI(data);
-          if (chartRef.current) {
+          case 'RSI':
+            const rsi = calculateRSI(data);
+            if (!chartRef.current) return;
             const rsiSeries = chartRef.current.addLineSeries({
               color: '#33CC33',
               lineWidth: 2,
@@ -126,12 +199,11 @@ export function TradingView({ pair = 'SOL' }: ChartContainerProps) {
               visible: true,
               color: '#33CC33'
             };
-          }
-          break;
+            break;
 
-        case 'MACD':
-          const macdData = calculateMACD(data);
-          if (chartRef.current) {
+          case 'MACD':
+            const macdData = calculateMACD(data);
+            if (!chartRef.current) return;
             const macdSeries = chartRef.current.addLineSeries({
               color: '#FF9933',
               lineWidth: 2,
@@ -166,12 +238,11 @@ export function TradingView({ pair = 'SOL' }: ChartContainerProps) {
               visible: true,
               color: '#9966FF'
             };
-          }
-          break;
+            break;
 
-        case 'BB':
-          const bb = calculateBollingerBands(data);
-          if (chartRef.current) {
+          case 'BB':
+            const bb = calculateBollingerBands(data);
+            if (!chartRef.current) return;
             const upperSeries = chartRef.current.addLineSeries({
               color: '#9966FF',
               lineWidth: 1,
@@ -210,108 +281,13 @@ export function TradingView({ pair = 'SOL' }: ChartContainerProps) {
               visible: true,
               color: '#9966FF'
             };
-          }
-          break;
-      }
-    });
-  };
-
-  const fetchOHLCData = async () => {
-    try {
-      setIsLoading(true);
-      const data = await fetchTokenOHLC(pair, timeframe);
-      
-      if (!data || data.length === 0) {
-        throw new Error('No OHLC data found');
-      }
-
-      const candleData: CandlestickData[] = data.map((item: any) => ({
-        time: item.time,
-        open: item.open,
-        high: item.high,
-        low: item.low,
-        close: item.close
-      }));
-
-      if (candlestickSeriesRef.current) {
-        candlestickSeriesRef.current.setData(candleData);
-        updateIndicators(candleData);
-      }
-
-      if (volumeSeriesRef.current) {
-        const volumeData = data.map((item: any) => ({
-          time: item.time,
-          value: item.volume,
-          color: item.close >= item.open ? 'rgba(0, 150, 136, 0.3)' : 'rgba(255, 82, 82, 0.3)'
-        }));
-        volumeSeriesRef.current.setData(volumeData);
-      }
-    } catch (error) {
-      console.error('Error fetching OHLC data:', error);
-    } finally {
-      setIsLoading(false);
+            break;
+        }
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to calculate indicators');
     }
   };
-
-  useEffect(() => {
-    if (!chartContainerRef.current) return;
-
-    const chart = createChart(chartContainerRef.current, {
-      layout: {
-        background: { color: 'transparent' },
-        textColor: '#D9D9D9',
-      },
-      grid: {
-        vertLines: { color: '#404040' },
-        horzLines: { color: '#404040' },
-      },
-      width: chartContainerRef.current.clientWidth,
-      height: chartContainerRef.current.clientHeight,
-    });
-
-    const candleSeries = chart.addCandlestickSeries({
-      upColor: '#00897B',
-      downColor: '#FF5252',
-      borderVisible: false,
-      wickUpColor: '#00897B',
-      wickDownColor: '#FF5252',
-    });
-
-    const volumeSeries = chart.addHistogramSeries({
-      color: '#26a69a',
-      priceFormat: {
-        type: 'volume',
-      },
-      priceScaleId: '',
-    });
-
-    chartRef.current = chart;
-    candlestickSeriesRef.current = candleSeries;
-    volumeSeriesRef.current = volumeSeries;
-
-    const handleResize = () => {
-      if (chartContainerRef.current && chartRef.current) {
-        chartRef.current.applyOptions({
-          width: chartContainerRef.current.clientWidth,
-          height: chartContainerRef.current.clientHeight,
-        });
-      }
-    };
-
-    window.addEventListener('resize', handleResize);
-    fetchOHLCData();
-
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      if (chartRef.current) {
-        chartRef.current.remove();
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    fetchOHLCData();
-  }, [pair, timeframe]);
 
   const toggleIndicator = (indicatorName: string) => {
     const newActiveIndicators = new Set(activeIndicators);
@@ -360,7 +336,14 @@ export function TradingView({ pair = 'SOL' }: ChartContainerProps) {
       <div className="flex-1" ref={chartContainerRef}>
         {isLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-background/50">
-            <div className="text-sm text-muted-foreground">Loading chart...</div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          </div>
+        )}
+        {error && (
+          <div className="absolute inset-0 flex items-center justify-center bg-background/50">
+            <div className="bg-red-500/10 text-red-500 p-4 rounded-lg">
+              {error}
+            </div>
           </div>
         )}
       </div>
