@@ -85,6 +85,7 @@ export function PerpetualTrading() {
         size: new BN(sizeNum * 1e6),
         leverage: leverageNum,
         collateral: new BN(collateralNum * 1e6),
+        price: new BN(currentPrice || 0),
       };
 
       await openPosition(params);
@@ -147,162 +148,106 @@ export function PerpetualTrading() {
   return (
     <Card>
       <CardContent className="p-6">
-        <div className="space-y-6">
-          {/* Account Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">Account Balance</p>
-              <p className="text-2xl font-bold">${formattedBalance}</p>
-            </div>
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">Current Price</p>
-              <p className="text-2xl font-bold">
-                ${currentPrice ? (currentPrice.toNumber() / 1e6).toFixed(2) : '0.00'}
-              </p>
-            </div>
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">Funding Rate</p>
-              <p className="text-2xl font-bold">
-                {fundingRate ? (fundingRate.toNumber() / 1e6 * 100).toFixed(4) : '0.00'}%
-              </p>
-            </div>
-          </div>
+        <Tabs defaultValue="trade" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="trade">Trade</TabsTrigger>
+            <TabsTrigger value="info">Market Info</TabsTrigger>
+          </TabsList>
 
-          {/* Trading Interface */}
-          <Tabs defaultValue="market" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="market">Market</TabsTrigger>
-              <TabsTrigger value="limit">Limit</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="market" className="space-y-4">
-              <form onSubmit={handleSubmit} className="space-y-4">
-                {/* Direction Selection */}
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    type="button"
-                    variant={direction === TradeDirection.Long ? "default" : "outline"}
-                    className={cn(
-                      "w-full",
-                      direction === TradeDirection.Long && "bg-green-500 hover:bg-green-600"
-                    )}
-                    onClick={() => setDirection(TradeDirection.Long)}
-                  >
-                    Long
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={direction === TradeDirection.Short ? "default" : "outline"}
-                    className={cn(
-                      "w-full",
-                      direction === TradeDirection.Short && "bg-red-500 hover:bg-red-600"
-                    )}
-                    onClick={() => setDirection(TradeDirection.Short)}
-                  >
-                    Short
-                  </Button>
-                </div>
-
-                {/* Size Input */}
-                <div className="space-y-2">
-                  <Label htmlFor="size">Size (USD)</Label>
-                  <Input
-                    id="size"
-                    type="text"
-                    value={size}
-                    onChange={(e) => handleSizeChange(e.target.value)}
-                    placeholder="Enter position size"
-                    className="flex-1"
-                    pattern="\d*\.?\d*"
-                    disabled={isSubmitting}
-                  />
-                </div>
-
-                {/* Leverage Selection */}
-                <div className="space-y-2">
-                  <Label htmlFor="leverage">Leverage</Label>
-                  <Select 
-                    value={leverage} 
-                    onValueChange={handleLeverageChange}
-                    disabled={isSubmitting}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select leverage" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {[1, 2, 3, 5, 10].map((value) => (
-                        <SelectItem key={value} value={value.toString()}>
-                          {value}x
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Required Collateral */}
-                <div className="space-y-2">
-                  <Label>Required Collateral (USDT)</Label>
-                  <Input
-                    value={calculateRequiredCollateral()}
-                    readOnly
-                    disabled
-                  />
-                  <p className="text-sm text-muted-foreground">
-                    {Number(leverage)}x leverage requires {(100 / Number(leverage)).toFixed(2)}% collateral
-                  </p>
-                </div>
-
-                {/* Collateral Input */}
-                <div className="space-y-2">
-                  <Label htmlFor="collateral">Collateral (USD)</Label>
-                  <Input
-                    id="collateral"
-                    type="text"
-                    value={collateral}
-                    onChange={(e) => handleCollateralChange(e.target.value)}
-                    placeholder="Enter collateral amount"
-                    className="flex-1"
-                    pattern="\d*\.?\d*"
-                    disabled={isSubmitting}
-                  />
-                  <p className="text-sm text-muted-foreground">
-                    Available: ${formattedBalance}
-                  </p>
-                </div>
-
-                {errorState && (
-                  <div className="mt-4 p-3 bg-red-500/10 text-red-500 rounded-lg text-sm">
-                    {errorState}
-                  </div>
-                )}
-
+          <TabsContent value="trade" className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="flex gap-4">
                 <Button
-                  type="submit"
-                  className={cn(
-                    "w-full mt-4",
-                    direction === TradeDirection.Long ? "bg-green-500 hover:bg-green-600" : "bg-red-500 hover:bg-red-600"
-                  )}
-                  disabled={isSubmitting || !publicKey}
+                  type="button"
+                  variant={direction === TradeDirection.Long ? "default" : "outline"}
+                  onClick={() => setDirection(TradeDirection.Long)}
+                  className="flex-1"
                 >
-                  {isSubmitting ? (
-                    <div className="flex items-center justify-center">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      Processing...
-                    </div>
-                  ) : (
-                    `Open ${direction === TradeDirection.Long ? 'Long' : 'Short'} Position`
-                  )}
+                  Long
                 </Button>
-              </form>
-            </TabsContent>
-
-            <TabsContent value="limit" className="space-y-4">
-              <div className="flex items-center justify-center h-40">
-                <p className="text-muted-foreground">Limit orders coming soon</p>
+                <Button
+                  type="button"
+                  variant={direction === TradeDirection.Short ? "default" : "outline"}
+                  onClick={() => setDirection(TradeDirection.Short)}
+                  className="flex-1"
+                >
+                  Short
+                </Button>
               </div>
-            </TabsContent>
-          </Tabs>
-        </div>
+
+              <div className="space-y-2">
+                <Label>Size</Label>
+                <Input
+                  type="number"
+                  value={size}
+                  onChange={(e) => setSize(e.target.value)}
+                  placeholder="Enter position size"
+                  min="0"
+                  step="0.01"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Leverage</Label>
+                <Select value={leverage} onValueChange={setLeverage}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select leverage" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[1, 2, 3, 5, 10, 20].map((lev) => (
+                      <SelectItem key={lev} value={lev.toString()}>
+                        {lev}x
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Collateral</Label>
+                <Input
+                  type="number"
+                  value={collateral}
+                  onChange={(e) => setCollateral(e.target.value)}
+                  placeholder="Enter collateral amount"
+                  min="0"
+                  step="0.01"
+                />
+                <p className="text-sm text-muted-foreground">
+                  Available: {formattedBalance} USDC
+                </p>
+              </div>
+
+              {errorState && (
+                <p className="text-sm text-destructive">{errorState}</p>
+              )}
+
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={isSubmitting || !publicKey}
+              >
+                {isSubmitting ? "Opening Position..." : "Open Position"}
+              </Button>
+            </form>
+          </TabsContent>
+
+          <TabsContent value="info" className="space-y-4">
+            <div className="space-y-2">
+              <Label>Current Price</Label>
+              <p className="text-2xl font-bold">
+                ${currentPrice ? (currentPrice.toNumber() / 1e6).toFixed(2) : "0.00"}
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Funding Rate</Label>
+              <p className="text-lg">
+                {fundingRate ? (fundingRate.toNumber() / 1e6).toFixed(4) : "0.00"}%
+              </p>
+            </div>
+          </TabsContent>
+        </Tabs>
       </CardContent>
     </Card>
   );

@@ -18,7 +18,7 @@ const TradingTabs = dynamic(
 
 const TradingInterface: FC = () => {
   const { connected } = useWallet();
-  const { selectedMarket } = useMockTrading();
+  const { selectedMarket, refreshData } = useMockTrading();
 
   if (!connected) {
     return (
@@ -37,7 +37,14 @@ const TradingInterface: FC = () => {
         <div className="col-span-12">
           <Card>
             <CardContent className="p-4">
-              <TradePairSelector />
+              <TradePairSelector 
+                selectedPair={selectedMarket}
+                onPairSelect={(pair) => {
+                  // Update the selected market in the context and refresh data
+                  refreshData();
+                }}
+                showFullMarketData={true}
+              />
             </CardContent>
           </Card>
         </div>

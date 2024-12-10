@@ -3,6 +3,7 @@ import { PublicKey } from '@solana/web3.js';
 import BN from 'bn.js';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Dialog,
   DialogContent,
@@ -14,6 +15,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { usePerpetual } from '../../contexts/PerpetualContext';
 import { Position, TradeDirection } from '../../perpetuals/types';
 import { formatNumber } from '@/utils/format';
+import cn from 'classnames';
 
 export function PositionManager() {
   const {
@@ -34,7 +36,7 @@ export function PositionManager() {
 
   const handleClose = async (position: Position) => {
     try {
-      await closePosition(position.user);
+      await closePosition(position.user.toString());
       toast({
         title: 'Success',
         description: 'Position closed successfully',
@@ -49,18 +51,18 @@ export function PositionManager() {
   };
 
   const handleModalAction = async () => {
-    if (!selectedPosition || !modalAction) return;
+    if (!selectedPosition || !modalAction || !inputValue) return;
 
     try {
       switch (modalAction) {
         case 'leverage':
-          await updateLeverage(selectedPosition.user, parseFloat(inputValue));
+          await updateLeverage(selectedPosition.user.toString(), parseFloat(inputValue));
           break;
         case 'collateral':
           if (parseFloat(inputValue) > 0) {
-            await addCollateral(selectedPosition.user, new BN(parseFloat(inputValue) * 1e9));
+            await addCollateral(selectedPosition.user.toString(), new BN(parseFloat(inputValue) * 1e6));
           } else {
-            await removeCollateral(selectedPosition.user, new BN(Math.abs(parseFloat(inputValue)) * 1e9));
+            await removeCollateral(selectedPosition.user.toString(), new BN(Math.abs(parseFloat(inputValue)) * 1e6));
           }
           break;
       }
@@ -98,36 +100,40 @@ export function PositionManager() {
       ) : (
         <div className="space-y-3">
           {positions.map((position) => (
-            <div key={position.user.toString()} className="p-3 bg-card rounded-lg border">
-              <div className="flex justify-between items-center mb-2">
-                <span className={`font-medium ${
-                  position.direction === TradeDirection.Long ? 'text-green-500' : 'text-red-500'
-                }`}>
-                  {position.direction === TradeDirection.Long ? 'Long' : 'Short'} {position.market}
-                </span>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => handleClose(position)}
-                  disabled={loading}
-                >
-                  Close
-                </Button>
+            <div key={position.user.toString()} className="p-4 bg-card rounded-lg border">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Size</p>
+                  <p className="font-medium">
+                    {formatNumber(position.size.toNumber() / 1e6)} USD
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Entry Price</p>
+                  <p className="font-medium">
+                    ${formatNumber(position.entryPrice.toNumber() / 1e6)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Leverage</p>
+                  <p className="font-medium">{position.leverage}x</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Direction</p>
+                  <p className={cn(
+                    "font-medium",
+                    position.direction === TradeDirection.Long ? "text-green-500" : "text-red-500"
+                  )}>
+                    {position.direction === TradeDirection.Long ? "Long" : "Short"}
+                  </p>
+                </div>
               </div>
-              
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div>Entry Price: <span className="font-medium">{formatNumber(position.entryPrice.toNumber() / 1e9)} USDT</span></div>
-                <div>Current Price: <span className="font-medium">{formatNumber(currentPrice / 1e9)} USDT</span></div>
-                <div>Size: <span className="font-medium">{formatNumber(position.size.toNumber() / 1e9)} {position.market}</span></div>
-                <div>Leverage: <span className="font-medium">{position.leverage}x</span></div>
-              </div>
-              
-              <div className="flex gap-2 mt-3">
+
+              <div className="mt-4 flex gap-2">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => handleModalOpen('leverage', position)}
-                  className="flex-1"
                 >
                   Adjust Leverage
                 </Button>
@@ -135,9 +141,15 @@ export function PositionManager() {
                   variant="outline"
                   size="sm"
                   onClick={() => handleModalOpen('collateral', position)}
-                  className="flex-1"
                 >
-                  Manage Collateral
+                  Adjust Collateral
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => handleClose(position)}
+                >
+                  Close Position
                 </Button>
               </div>
             </div>
@@ -152,14 +164,28 @@ export function PositionManager() {
               {modalAction === 'leverage' ? 'Adjust Leverage' : 'Adjust Collateral'}
             </DialogTitle>
           </DialogHeader>
-          <div className="py-4">
-            <Input
-              type="number"
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              placeholder={modalAction === 'leverage' ? 'Enter leverage (e.g., 2)' : 'Enter amount (negative to remove)'}
-            />
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>
+                {modalAction === 'leverage' ? 'New Leverage' : 'Collateral Amount'}
+              </Label>
+              <Input
+                type="number"
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                placeholder={modalAction === 'leverage' ? "Enter leverage" : "Enter amount"}
+                min={modalAction === 'leverage' ? "1" : undefined}
+                step={modalAction === 'leverage' ? "1" : "0.01"}
+              />
+              {modalAction === 'collateral' && (
+                <p className="text-sm text-muted-foreground">
+                  Use negative values to remove collateral
+                </p>
+              )}
+            </div>
           </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsOpen(false)}>
               Cancel
