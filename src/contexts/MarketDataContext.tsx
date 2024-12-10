@@ -81,7 +81,7 @@ export function MarketDataProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const getHistoricalPrices = async (coinId: string, days = 7) => {
+  const getHistoricalPrices = async (coinId: string, days: number = 1): Promise<any> => {
     try {
       return await marketService.getHistoricalPrices(coinId, days);
     } catch (err) {
@@ -90,9 +90,12 @@ export function MarketDataProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const getTopMarketPairs = (limit = 10): MarketPair[] => {
+  const getTopMarketPairs = (limit: number = 10): MarketPair[] => {
     try {
-      return marketService.getTopMarketPairs(limit);
+      const allPairs = Object.values(marketPairs).flat();
+      return allPairs
+        .sort((a, b) => b.volume - a.volume)
+        .slice(0, limit);
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Failed to get top market pairs'));
       return [];

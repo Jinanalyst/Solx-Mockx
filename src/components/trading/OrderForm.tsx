@@ -96,24 +96,32 @@ export function OrderForm({ pair, mode = 'spot', onOrderSubmit, onError }: Order
     return () => clearInterval(interval);
   }, [pair, getTokenPrice, setValue, price]);
 
-  // Update balances
   useEffect(() => {
-    const updateBalances = async () => {
-      if (!publicKey) return;
+    const fetchBalances = async () => {
+      if (!publicKey) {
+        setBalances({ base: 0, quote: 0 });
+        return;
+      }
+
       try {
-        const [baseToken, quoteToken] = pair.split('/');
-        const baseBalance = await getTokenBalance(baseToken, publicKey);
-        const quoteBalance = await getTokenBalance(quoteToken, publicKey);
-        setBalances({ base: baseBalance, quote: quoteBalance });
+        const [baseSymbol, quoteSymbol] = pair.split('/');
+        const [baseBalance, quoteBalance] = await Promise.all([
+          getTokenBalance(baseSymbol.toLowerCase(), publicKey),
+          getTokenBalance(quoteSymbol.toLowerCase(), publicKey),
+        ]);
+
+        setBalances({
+          base: baseBalance,
+          quote: quoteBalance,
+        });
       } catch (error) {
         console.error('Failed to fetch balances:', error);
+        onError?.(error);
       }
     };
 
-    updateBalances();
-    const interval = setInterval(updateBalances, 10000);
-    return () => clearInterval(interval);
-  }, [publicKey, pair, getTokenBalance]);
+    fetchBalances();
+  }, [publicKey, pair, getTokenBalance, onError]);
 
   const percentageButtons = [25, 50, 75, 100];
 

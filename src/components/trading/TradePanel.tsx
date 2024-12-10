@@ -36,19 +36,39 @@ export function TradePanel({
   const [orderSide, setOrderSide] = useState<'buy' | 'sell'>('buy');
 
   const handleSubmit = async () => {
-    if (!isWalletConnected) {
-      onConnectWallet?.();
-      return;
-    }
+    try {
+      if (!isWalletConnected) {
+        await onConnectWallet?.();
+        return;
+      }
 
-    // TODO: Implement order submission
-    console.log('Submitting order:', {
-      symbol,
-      type: activeTab,
-      side: orderSide,
-      amount,
-      price: activeTab === 'limit' ? price : undefined,
-    });
+      if (!amount || (activeTab === 'limit' && !price)) {
+        throw new Error('Please enter all required fields');
+      }
+
+      const parsedAmount = parseFloat(amount);
+      const parsedPrice = activeTab === 'limit' ? parseFloat(price) : undefined;
+
+      if (isNaN(parsedAmount) || parsedAmount <= 0) {
+        throw new Error('Invalid amount');
+      }
+
+      if (parsedPrice !== undefined && (isNaN(parsedPrice) || parsedPrice <= 0)) {
+        throw new Error('Invalid price');
+      }
+
+      // TODO: Implement order submission
+      console.log('Submitting order:', {
+        symbol,
+        type: activeTab,
+        side: orderSide,
+        amount: parsedAmount,
+        price: parsedPrice,
+      });
+    } catch (error) {
+      console.error('Error submitting order:', error);
+      // You might want to add a toast notification here
+    }
   };
 
   return (

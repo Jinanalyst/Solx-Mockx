@@ -1,8 +1,21 @@
+'use client';
+
 import { CoinInfo, MarketPair, TokenPrice } from '@/types/market';
 import axios, { AxiosError } from 'axios';
 import { mockMarketData } from '@/mocks/marketData';
 import { logger } from './loggingService';
 import { PublicKey } from '@solana/web3.js';
+import { Connection } from '@solana/web3.js';
+import { getAssociatedTokenAddress } from '@solana/spl-token';
+import { MOCK_MODE } from '@/utils/constants';
+
+interface CoinGeckoResponse {
+  [key: string]: {
+    usd?: number;
+    btc?: number;
+    eth?: number;
+  };
+}
 
 export class MarketDataService {
   private static instance: MarketDataService;
@@ -11,8 +24,9 @@ export class MarketDataService {
   private updateInterval = 30000; // 30 seconds
   private retryDelay = 5000; // 5 seconds
   private maxRetries = 3;
-  private useMockData = false;
+  private useMockData = process.env.NEXT_PUBLIC_USE_MOCK_DATA === 'true';
   private rateLimitResetTime: number | null = null;
+  private connection: Connection;
 
   private marketData: Map<string, CoinInfo> = new Map();
   private marketPairs: Map<string, MarketPair[]> = new Map();
@@ -24,6 +38,10 @@ export class MarketDataService {
   private cacheExpiry = 5 * 60 * 1000; // 5 minutes
 
   private constructor() {
+    this.connection = new Connection(
+      process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com',
+      'confirmed'
+    );
     this.startPolling();
   }
 
@@ -55,7 +73,7 @@ export class MarketDataService {
       logger.warn('Rate limit in effect, using mock data', {
         resetTime: new Date(this.rateLimitResetTime).toISOString(),
       });
-      return this.getMockData() as T;
+      return this.getMockData(url) as T;
     }
 
     for (let i = 0; i < retries; i++) {
@@ -77,9 +95,10 @@ export class MarketDataService {
           });
         }
 
-        // Reset mock data flag and rate limit on successful API call
-        this.useMockData = false;
-        this.rateLimitResetTime = null;
+        // Reset rate limit on successful API call
+        if (!this.useMockData) {
+          this.rateLimitResetTime = null;
+        }
         
         logger.info('API request successful', {
           url,
@@ -101,8 +120,7 @@ export class MarketDataService {
           logger.warn('Rate limit hit, switching to mock data', {
             resetTime: new Date(this.rateLimitResetTime).toISOString(),
           });
-          this.useMockData = true;
-          return this.getMockData() as T;
+          return this.getMockData(url) as T;
         }
 
         logger.error(`API request failed (attempt ${i + 1}/${retries})`, {
@@ -119,15 +137,56 @@ export class MarketDataService {
 
     if (this.useMockData) {
       logger.info('Falling back to mock data after all retries failed');
-      return this.getMockData() as T;
+      return this.getMockData(url) as T;
     }
 
     throw lastError || new Error('Failed to fetch data');
   }
 
-  private getMockData(): CoinInfo[] {
-    logger.debug('Using mock market data');
-    return Object.values(mockMarketData);
+  private getMockData(url: string): any {
+    logger.debug('Using mock market data', { url });
+    
+    if (url.includes('/coins/markets')) {
+      return mockMarketData;
+    }
+    
+    if (url.includes('/simple/price')) {
+      const tokenId = url.split('ids=')[1]?.split('&')[0];
+      const mockCoin = mockMarketData.find(coin => coin.id === tokenId);
+      if (!mockCoin) return {};
+      
+      return {
+        [tokenId]: {
+          usd: mockCoin.current_price,
+          btc: mockCoin.current_price / 40000,
+          eth: mockCoin.current_price / 2000,
+        }
+      };
+    }
+    
+    if (url.includes('/search')) {
+      const query = url.split('query=')[1];
+      if (!query) return { coins: [] };
+      
+      return {
+        coins: mockMarketData.filter(coin => 
+          coin.name.toLowerCase().includes(query.toLowerCase()) ||
+          coin.symbol.toLowerCase().includes(query.toLowerCase())
+        )
+      };
+    }
+    
+    if (url.includes('/market_chart')) {
+      const now = Date.now();
+      return {
+        prices: Array.from({ length: 100 }, (_, i) => [
+          now - (100 - i) * 86400000,
+          Math.random() * 1000 + 30000
+        ])
+      };
+    }
+    
+    return [];
   }
 
   private async updateMarketData() {
@@ -158,10 +217,9 @@ export class MarketDataService {
         lastUpdateTime: new Date(this.lastUpdate).toISOString(),
       }, error as Error);
 
-      if (!this.useMockData) {
-        this.useMockData = true;
-        const mockData = this.getMockData();
-        mockData.forEach(coin => {
+      if (!this.marketData.size) {
+        const mockData = this.getMockData(`${this.baseUrl}/coins/markets`);
+        mockData.forEach((coin: CoinInfo) => {
           this.marketData.set(coin.id, coin);
         });
         this.notifySubscribers();
@@ -170,12 +228,18 @@ export class MarketDataService {
   }
 
   private startPolling() {
+    if (this.updateTimeout) {
+      clearTimeout(this.updateTimeout);
+    }
+
     const poll = async () => {
       await this.updateMarketData();
       this.updateTimeout = setTimeout(poll, this.updateInterval);
     };
 
-    poll();
+    poll().catch(error => {
+      logger.error('Error in polling market data', error);
+    });
   }
 
   public getAllMarketData(): CoinInfo[] {
@@ -203,167 +267,150 @@ export class MarketDataService {
 
   public async getTokenPrice(tokenId: string): Promise<TokenPrice | null> {
     try {
-      logger.debug('Fetching token price', { tokenId });
-
-      if (this.useMockData) {
-        const mockPrice = (mockMarketData as any)[tokenId];
-        return mockPrice ? { usd: mockPrice.usd } : null;
+      if (MOCK_MODE) {
+        const mockData = mockMarketData.find(coin => coin.id === tokenId.toLowerCase());
+        if (!mockData) return null;
+        
+        return {
+          usd: mockData.current_price,
+          last_updated_at: new Date(mockData.last_updated).getTime() / 1000
+        };
       }
 
-      const data = await this.fetchWithRetry<any>(
-        `${this.baseUrl}/simple/price?ids=${tokenId}&vs_currencies=usd`
-      );
-
-      const price = data[tokenId];
-      if (price) {
-        logger.info('Token price fetched successfully', {
-          tokenId,
-          price: price.usd,
-        });
-      } else {
+      const url = `${this.baseUrl}/simple/price?ids=${tokenId}&vs_currencies=${this.supportedVsCurrencies.join(',')}`;
+      const response = await this.fetchWithRetry<CoinGeckoResponse>(url);
+      
+      if (!response[tokenId]) {
         logger.warn('Token price not found', { tokenId });
+        return null;
       }
 
-      return price || null;
+      const prices = response[tokenId];
+      return {
+        usd: prices.usd || 0,
+        btc: prices.btc,
+        eth: prices.eth,
+        last_updated_at: Date.now(),
+      };
     } catch (error) {
-      logger.error('Failed to get token price', { tokenId }, error as Error);
-      return null;
+      logger.error('Failed to fetch token price', { error, tokenId });
+      throw error;
     }
   }
 
-  public async searchCoins(query: string): Promise<CoinInfo[]> {
+  public async getTokenInfo(tokenId: string): Promise<CoinInfo | null> {
     try {
-      logger.debug('Searching coins', { query });
-
-      if (this.useMockData) {
-        const results = Object.entries(mockMarketData)
-          .filter(([id]) => id.includes(query.toLowerCase()))
-          .map(([id, data]) => ({
-            id,
-            symbol: id,
-            name: id.charAt(0).toUpperCase() + id.slice(1),
-            current_price: data.usd,
-            price_change_24h: data.usd_24h_change,
-            market_cap: data.market_cap,
-          } as CoinInfo));
-
-        logger.info('Coin search completed (mock)', {
-          query,
-          resultsCount: results.length,
-        });
-
-        return results;
+      if (MOCK_MODE) {
+        const mockData = mockMarketData.find(coin => coin.id === tokenId.toLowerCase());
+        return mockData || null;
       }
 
-      const data = await this.fetchWithRetry<any>(
-        `${this.baseUrl}/search?query=${query}`
-      );
+      const url = `${this.baseUrl}/coins/${tokenId}?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false&sparkline=false`;
+      const response = await this.fetchWithRetry<CoinInfo>(url);
+      
+      if (!response) {
+        logger.warn('Token info not found', { tokenId });
+        return null;
+      }
 
-      logger.info('Coin search completed', {
-        query,
-        resultsCount: data.coins?.length || 0,
-      });
-
-      return data.coins || [];
+      return response;
     } catch (error) {
-      logger.error('Failed to search coins', { query }, error as Error);
-      return [];
+      logger.error('Failed to fetch token info', { error, tokenId });
+      throw error;
     }
   }
 
   public async getTokenBalance(tokenId: string, walletAddress: PublicKey): Promise<number> {
     try {
-      logger.debug('Fetching token balance', { tokenId, walletAddress: walletAddress.toString() });
-
-      // For mock implementation, return a random balance between 0 and 100
-      if (this.useMockData) {
-        const mockBalance = Math.random() * 100;
-        logger.info('Using mock token balance', {
-          tokenId,
-          walletAddress: walletAddress.toString(),
-          balance: mockBalance,
-        });
-        return mockBalance;
+      if (MOCK_MODE) {
+        // Return mock balance based on token
+        const mockBalances: { [key: string]: number } = {
+          'So11111111111111111111111111111111111111112': 10, // SOL
+          '2k42cRS5yBmgXGiEGwebC8Y5BQvWH4xr5UKP5TijysTP': 1000, // SOLX
+          'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v': 1000, // USDC
+        };
+        return mockBalances[tokenId] || 0;
       }
 
-      // TODO: Implement actual token balance fetching using Solana web3.js
-      // This would involve:
-      // 1. Getting the token mint address for the given tokenId
-      // 2. Finding the associated token account for the wallet
-      // 3. Fetching the token account balance
-      const mockBalance = Math.random() * 100;
+      // Get token mint address for the given token
+      const tokenMint = new PublicKey(tokenId); // This needs to be updated with actual token mint mapping
       
-      logger.info('Token balance fetched successfully', {
-        tokenId,
-        walletAddress: walletAddress.toString(),
-        balance: mockBalance,
-      });
-
-      return mockBalance;
+      try {
+        // Get associated token account
+        const tokenAccount = await getAssociatedTokenAddress(tokenMint, walletAddress);
+        const accountInfo = await this.connection.getTokenAccountBalance(tokenAccount);
+        return accountInfo.value.uiAmount || 0;
+      } catch (error) {
+        logger.warn('Token account not found, assuming zero balance', { 
+          tokenId, 
+          walletAddress: walletAddress.toBase58(),
+          error: error instanceof Error ? error.message : String(error)
+        });
+        return 0;
+      }
     } catch (error) {
-      logger.error('Failed to get token balance', 
-        { tokenId, walletAddress: walletAddress.toString() }, 
-        error as Error
-      );
+      logger.error('Failed to fetch token balance', { 
+        error: error instanceof Error ? error.message : String(error), 
+        tokenId, 
+        walletAddress: walletAddress.toBase58() 
+      });
+      throw error;
+    }
+  }
+
+  public async getSolBalance(walletAddress: string): Promise<number> {
+    try {
+      if (MOCK_MODE) {
+        return 10; // Mock SOL balance
+      }
+
+      const wallet = new PublicKey(walletAddress);
+      const balance = await this.connection.getBalance(wallet);
+      return balance / 1e9; // Convert lamports to SOL
+    } catch (error) {
+      logger.error(`Error fetching SOL balance for ${walletAddress}:`, error);
       return 0;
     }
   }
 
-  public getTopMarketPairs(limit: number = 10): MarketPair[] {
-    const allPairs = Array.from(this.marketPairs.values()).flat();
-    return allPairs
-      .sort((a, b) => b.volume - a.volume)
-      .slice(0, limit);
-  }
-
-  public async getHistoricalPrices(coinId: string, days: number = 7): Promise<any> {
+  public async searchCoins(query: string): Promise<CoinInfo[]> {
     try {
-      logger.debug('Fetching historical prices', { coinId, days });
-
-      if (this.useMockData) {
-        const mockHistoricalData = this.generateMockHistoricalData(days);
-        logger.info('Using mock historical data', {
-          coinId,
-          days,
-          dataPoints: mockHistoricalData.length,
-        });
-        return mockHistoricalData;
-      }
-
-      const data = await this.fetchWithRetry<any>(
-        `${this.baseUrl}/coins/${coinId}/market_chart?vs_currency=usd&days=${days}`
-      );
-
-      logger.info('Historical prices fetched successfully', {
-        coinId,
-        days,
-        dataPoints: data.prices?.length || 0,
-      });
-
-      return data;
+      const url = `${this.baseUrl}/search?query=${encodeURIComponent(query)}`;
+      const response = await this.fetchWithRetry<{ coins: CoinInfo[] }>(url);
+      return response.coins || [];
     } catch (error) {
-      logger.error('Failed to fetch historical prices', { coinId, days }, error as Error);
-      return this.generateMockHistoricalData(days);
+      logger.error('Failed to search coins', { error, query });
+      throw error;
     }
   }
 
-  private generateMockHistoricalData(days: number) {
-    const mockData = [];
-    const now = Date.now();
-    const interval = (days * 24 * 60 * 60 * 1000) / 100; // 100 data points
-    const basePrice = 100;
-    
-    for (let i = 0; i < 100; i++) {
-      const timestamp = now - (99 - i) * interval;
-      const randomChange = (Math.random() - 0.5) * 5;
-      const price = basePrice + randomChange;
-      mockData.push([timestamp, price]);
+  public async getHistoricalPrices(coinId: string, days: number = 1): Promise<any> {
+    try {
+      const url = `${this.baseUrl}/coins/${coinId}/market_chart?vs_currency=usd&days=${days}`;
+      return await this.fetchWithRetry(url);
+    } catch (error) {
+      logger.error('Failed to fetch historical prices', { error, coinId, days });
+      throw error;
     }
+  }
 
-    return {
-      prices: mockData,
-      market_caps: mockData.map(([time, price]) => [time, price * 1000000]),
-      total_volumes: mockData.map(([time, price]) => [time, price * 100000]),
-    };
+  public getTopMarketPairs(limit: number = 10): MarketPair[] {
+    try {
+      const allPairs = Array.from(this.marketPairs.values()).flat();
+      return allPairs
+        .sort((a, b) => b.volume - a.volume)
+        .slice(0, limit);
+    } catch (error) {
+      logger.error('Failed to get top market pairs', { error, limit });
+      return [];
+    }
+  }
+
+  public cleanup() {
+    if (this.updateTimeout) {
+      clearTimeout(this.updateTimeout);
+    }
+    this.subscribers.clear();
+    this.cachedResponses.clear();
   }
 }

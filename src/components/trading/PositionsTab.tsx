@@ -33,16 +33,28 @@ export function PositionsTab({ symbol }: { symbol?: string }) {
   const { toast } = useToast();
 
   useEffect(() => {
-    if (!publicKey) return;
+    if (!publicKey) {
+      setPositions([]);
+      setIsLoading(false);
+      return;
+    }
 
     // Initial fetch
     const fetchPositions = async () => {
       try {
         setIsLoading(true);
-        const response = await fetch(`/api/positions?address=${publicKey.toBase58()}${symbol ? `&symbol=${symbol}` : ''}`);
+        const response = await fetch(
+          `/api/positions?address=${publicKey.toBase58()}${symbol ? `&symbol=${symbol}` : ''}`
+        );
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
         const data = await response.json();
         setPositions(data);
       } catch (error) {
+        console.error('Error fetching positions:', error);
         toast({
           title: "Error fetching positions",
           description: "Please try again later",
@@ -55,22 +67,35 @@ export function PositionsTab({ symbol }: { symbol?: string }) {
 
     fetchPositions();
 
-    // Set up WebSocket connection for real-time updates
-    const ws = new WebSocket(`${process.env.NEXT_PUBLIC_WS_URL}/positions`);
-    
-    ws.onopen = () => {
-      ws.send(JSON.stringify({
-        type: 'subscribe',
-        address: publicKey.toBase58(),
-        symbol,
-      }));
-    };
+    // WebSocket subscription
+    const ws = new WebSocket(
+      `${process.env.NEXT_PUBLIC_WS_URL}/positions?address=${publicKey.toBase58()}`
+    );
 
     ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === 'positions_update') {
-        setPositions(data.positions);
+      try {
+        const data = JSON.parse(event.data);
+        if (symbol) {
+          setPositions(prev => 
+            prev.map(pos => pos.symbol === symbol ? { ...pos, ...data } : pos)
+          );
+        } else {
+          setPositions(prev => 
+            prev.map(pos => data[pos.symbol] ? { ...pos, ...data[pos.symbol] } : pos)
+          );
+        }
+      } catch (error) {
+        console.error('Error processing WebSocket message:', error);
       }
+    };
+
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+      toast({
+        title: "Connection error",
+        description: "Failed to connect to real-time updates",
+        variant: "destructive",
+      });
     };
 
     return () => {
