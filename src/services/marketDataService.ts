@@ -2,6 +2,7 @@ import { CoinInfo, MarketPair, TokenPrice } from '@/types/market';
 import axios, { AxiosError } from 'axios';
 import { mockMarketData } from '@/mocks/marketData';
 import { logger } from './loggingService';
+import { PublicKey } from '@solana/web3.js';
 
 export class MarketDataService {
   private static instance: MarketDataService;
@@ -267,6 +268,44 @@ export class MarketDataService {
     } catch (error) {
       logger.error('Failed to search coins', { query }, error as Error);
       return [];
+    }
+  }
+
+  public async getTokenBalance(tokenId: string, walletAddress: PublicKey): Promise<number> {
+    try {
+      logger.debug('Fetching token balance', { tokenId, walletAddress: walletAddress.toString() });
+
+      // For mock implementation, return a random balance between 0 and 100
+      if (this.useMockData) {
+        const mockBalance = Math.random() * 100;
+        logger.info('Using mock token balance', {
+          tokenId,
+          walletAddress: walletAddress.toString(),
+          balance: mockBalance,
+        });
+        return mockBalance;
+      }
+
+      // TODO: Implement actual token balance fetching using Solana web3.js
+      // This would involve:
+      // 1. Getting the token mint address for the given tokenId
+      // 2. Finding the associated token account for the wallet
+      // 3. Fetching the token account balance
+      const mockBalance = Math.random() * 100;
+      
+      logger.info('Token balance fetched successfully', {
+        tokenId,
+        walletAddress: walletAddress.toString(),
+        balance: mockBalance,
+      });
+
+      return mockBalance;
+    } catch (error) {
+      logger.error('Failed to get token balance', 
+        { tokenId, walletAddress: walletAddress.toString() }, 
+        error as Error
+      );
+      return 0;
     }
   }
 

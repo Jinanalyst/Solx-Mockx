@@ -102,8 +102,8 @@ export function OrderForm({ pair, mode = 'spot', onOrderSubmit, onError }: Order
       if (!publicKey) return;
       try {
         const [baseToken, quoteToken] = pair.split('/');
-        const baseBalance = await getTokenBalance(baseToken);
-        const quoteBalance = await getTokenBalance(quoteToken);
+        const baseBalance = await getTokenBalance(baseToken, publicKey);
+        const quoteBalance = await getTokenBalance(quoteToken, publicKey);
         setBalances({ base: baseBalance, quote: quoteBalance });
       } catch (error) {
         console.error('Failed to fetch balances:', error);

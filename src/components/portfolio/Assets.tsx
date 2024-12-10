@@ -11,14 +11,14 @@ import { useWallet } from '@/contexts/WalletContext';
 
 export function Assets() {
   const { currentPortfolio, isLoading, error, fetchPortfolioSummary, initializePortfolio } = usePortfolioStore();
-  const { address } = useWallet();
+  const { publicKey } = useWallet();
 
   useEffect(() => {
-    if (address && !currentPortfolio) {
+    if (publicKey && !currentPortfolio) {
       // Initialize portfolio if it doesn't exist
-      initializePortfolio(address, 'REAL');
+      initializePortfolio(publicKey.toString(), 'REAL');
     }
-  }, [address, currentPortfolio, initializePortfolio]);
+  }, [publicKey, currentPortfolio, initializePortfolio]);
 
   useEffect(() => {
     if (currentPortfolio?.id) {
@@ -30,7 +30,7 @@ export function Assets() {
     }
   }, [currentPortfolio?.id, fetchPortfolioSummary]);
 
-  if (!address) {
+  if (!publicKey) {
     return (
       <Card className="p-6">
         <div className="text-center text-muted-foreground">

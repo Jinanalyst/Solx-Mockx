@@ -6,7 +6,7 @@ import { usePortfolioStore } from '@/stores/portfolioStore';
 import { usePrice } from '@/contexts/PriceContext';
 import { formatNumber } from '@/services/tokenService';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useWallet } from '@/contexts/WalletContext';
+import { useWallet } from '@solana/wallet-adapter-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
@@ -29,17 +29,17 @@ export function PositionsTab({ symbol }: { symbol?: string }) {
   const [positions, setPositions] = useState<Position[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { getPrice } = usePrice();
-  const { address } = useWallet();
+  const { publicKey } = useWallet();
   const { toast } = useToast();
 
   useEffect(() => {
-    if (!address) return;
+    if (!publicKey) return;
 
     // Initial fetch
     const fetchPositions = async () => {
       try {
         setIsLoading(true);
-        const response = await fetch(`/api/positions?address=${address}${symbol ? `&symbol=${symbol}` : ''}`);
+        const response = await fetch(`/api/positions?address=${publicKey.toBase58()}${symbol ? `&symbol=${symbol}` : ''}`);
         const data = await response.json();
         setPositions(data);
       } catch (error) {
@@ -55,54 +55,56 @@ export function PositionsTab({ symbol }: { symbol?: string }) {
 
     fetchPositions();
 
-    // WebSocket connection for real-time updates
+    // Set up WebSocket connection for real-time updates
     const ws = new WebSocket(`${process.env.NEXT_PUBLIC_WS_URL}/positions`);
     
     ws.onopen = () => {
-      ws.send(JSON.stringify({ 
-        type: 'subscribe', 
-        address,
-        symbol 
+      ws.send(JSON.stringify({
+        type: 'subscribe',
+        address: publicKey.toBase58(),
+        symbol,
       }));
     };
 
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      if (data.type === 'position_update') {
-        setPositions(prev => {
-          const updated = [...prev];
-          const index = updated.findIndex(p => p.id === data.position.id);
-          if (index !== -1) {
-            updated[index] = data.position;
-          } else {
-            updated.push(data.position);
-          }
-          return updated;
-        });
+      if (data.type === 'positions_update') {
+        setPositions(data.positions);
       }
     };
 
     return () => {
       ws.close();
     };
-  }, [address, symbol, toast]);
+  }, [publicKey, symbol, toast]);
 
   const handleClosePosition = async (positionId: string) => {
+    if (!publicKey) return;
+
     try {
       const response = await fetch('/api/positions/close', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ positionId }),
+        body: JSON.stringify({
+          positionId,
+          address: publicKey.toBase58(),
+        }),
       });
 
-      if (!response.ok) throw new Error('Failed to close position');
+      if (!response.ok) {
+        throw new Error('Failed to close position');
+      }
 
       toast({
         title: "Position closed",
         description: "Your position has been closed successfully",
       });
+
+      // Refetch positions
+      const updatedPositions = positions.filter(p => p.id !== positionId);
+      setPositions(updatedPositions);
     } catch (error) {
       toast({
         title: "Error closing position",
@@ -112,23 +114,23 @@ export function PositionsTab({ symbol }: { symbol?: string }) {
     }
   };
 
-  if (!address) {
+  if (isLoading) {
     return (
-      <Card className="p-6">
-        <div className="text-center text-muted-foreground">
-          Please connect your wallet to view your positions
-        </div>
-      </Card>
+      <div className="space-y-3">
+        <Skeleton className="h-20 w-full" />
+        <Skeleton className="h-20 w-full" />
+        <Skeleton className="h-20 w-full" />
+      </div>
     );
   }
 
-  if (isLoading) {
+  if (!publicKey) {
     return (
-      <div className="space-y-4">
-        <Skeleton className="h-24 w-full" />
-        <Skeleton className="h-24 w-full" />
-        <Skeleton className="h-24 w-full" />
-      </div>
+      <Card className="p-6">
+        <div className="text-center text-muted-foreground">
+          Please connect your wallet to view positions
+        </div>
+      </Card>
     );
   }
 
@@ -136,7 +138,7 @@ export function PositionsTab({ symbol }: { symbol?: string }) {
     return (
       <Card className="p-6">
         <div className="text-center text-muted-foreground">
-          No open positions {symbol ? `for ${symbol}` : ''}
+          No open positions found
         </div>
       </Card>
     );
@@ -144,65 +146,43 @@ export function PositionsTab({ symbol }: { symbol?: string }) {
 
   return (
     <div className="space-y-4">
-      {positions.map((position) => {
-        const currentPrice = getPrice(position.symbol);
-        const pnlPercentage = (position.unrealizedPnL / position.margin) * 100;
-        const isProfit = position.unrealizedPnL > 0;
-
-        return (
-          <Card key={position.id} className="p-4">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center space-x-2">
-                <h3 className="font-medium">{position.symbol}</h3>
-                <Badge variant={position.type === 'LONG' ? 'default' : 'destructive'}>
+      {positions.map((position) => (
+        <Card key={position.id} className="p-4">
+          <div className="flex justify-between items-start">
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <h4 className="text-lg font-semibold">{position.symbol}</h4>
+                <Badge variant={position.type === 'LONG' ? 'default' : 'destructive'} className={position.type === 'LONG' ? 'bg-green-500 hover:bg-green-600' : ''}>
                   {position.type}
                 </Badge>
                 <Badge variant="outline">{position.leverage}x</Badge>
+              </div>
+              <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-sm">
+                <div className="text-muted-foreground">Entry Price:</div>
+                <div>${formatNumber(position.entryPrice)}</div>
+                <div className="text-muted-foreground">Size:</div>
+                <div>{formatNumber(position.quantity)}</div>
+                <div className="text-muted-foreground">Margin:</div>
+                <div>${formatNumber(position.margin)}</div>
+                <div className="text-muted-foreground">Liq. Price:</div>
+                <div>${formatNumber(position.liquidationPrice)}</div>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className={`text-lg font-semibold mb-2 ${position.unrealizedPnL >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                ${formatNumber(position.unrealizedPnL)}
               </div>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => handleClosePosition(position.id)}
               >
-                Close
+                Close Position
               </Button>
             </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Size</p>
-                <p className="font-medium">
-                  {formatNumber(position.quantity)} {position.symbol.split('/')[0]}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Entry Price</p>
-                <p className="font-medium">${formatNumber(position.entryPrice)}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Mark Price</p>
-                <p className="font-medium">${formatNumber(currentPrice)}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Liquidation Price</p>
-                <p className="font-medium text-destructive">
-                  ${formatNumber(position.liquidationPrice)}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Margin</p>
-                <p className="font-medium">${formatNumber(position.margin)}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Unrealized P/L</p>
-                <p className={`font-medium ${isProfit ? 'text-green-500' : 'text-red-500'}`}>
-                  ${formatNumber(Math.abs(position.unrealizedPnL))} ({pnlPercentage.toFixed(2)}%)
-                </p>
-              </div>
-            </div>
-          </Card>
-        );
-      })}
+          </div>
+        </Card>
+      ))}
     </div>
   );
 }

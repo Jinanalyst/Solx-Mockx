@@ -5,14 +5,54 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { OrderBook } from './OrderBook';
+import { cn } from "@/lib/utils";
 
-export function TradePanel({ symbol = 'BTC/USDT' }: { symbol?: string }) {
+interface TradePanelProps {
+  symbol?: string;
+  baseAsset?: string;
+  quoteAsset?: string;
+  baseBalance?: number;
+  quoteBalance?: number;
+  isWalletConnected?: boolean;
+  onConnectWallet?: () => Promise<void>;
+  isLoadingBalances?: boolean;
+  className?: string;
+}
+
+export function TradePanel({
+  symbol = 'BTC/USDT',
+  baseAsset = 'BTC',
+  quoteAsset = 'USDT',
+  baseBalance = 0,
+  quoteBalance = 0,
+  isWalletConnected = false,
+  onConnectWallet,
+  isLoadingBalances = false,
+  className,
+}: TradePanelProps) {
   const [activeTab, setActiveTab] = useState("limit");
   const [amount, setAmount] = useState("");
   const [price, setPrice] = useState("");
+  const [orderSide, setOrderSide] = useState<'buy' | 'sell'>('buy');
+
+  const handleSubmit = async () => {
+    if (!isWalletConnected) {
+      onConnectWallet?.();
+      return;
+    }
+
+    // TODO: Implement order submission
+    console.log('Submitting order:', {
+      symbol,
+      type: activeTab,
+      side: orderSide,
+      amount,
+      price: activeTab === 'limit' ? price : undefined,
+    });
+  };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className={cn("flex flex-col h-full", className)}>
       {/* Trading form */}
       <div className="p-4 border-b">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -24,26 +64,57 @@ export function TradePanel({ symbol = 'BTC/USDT' }: { symbol?: string }) {
           <TabsContent value="limit">
             <div className="space-y-4">
               <div>
-                <label className="text-sm font-medium">Price</label>
+                <div className="flex justify-between mb-1">
+                  <label className="text-sm font-medium">Price</label>
+                  {!isLoadingBalances && (
+                    <span className="text-sm text-muted-foreground">
+                      Balance: {quoteBalance.toFixed(4)} {quoteAsset}
+                    </span>
+                  )}
+                </div>
                 <Input
                   type="number"
                   value={price}
                   onChange={(e) => setPrice(e.target.value)}
-                  placeholder="Enter price"
+                  placeholder={`Enter price in ${quoteAsset}`}
                 />
               </div>
               <div>
-                <label className="text-sm font-medium">Amount</label>
+                <div className="flex justify-between mb-1">
+                  <label className="text-sm font-medium">Amount</label>
+                  {!isLoadingBalances && (
+                    <span className="text-sm text-muted-foreground">
+                      Balance: {baseBalance.toFixed(4)} {baseAsset}
+                    </span>
+                  )}
+                </div>
                 <Input
                   type="number"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
-                  placeholder="Enter amount"
+                  placeholder={`Enter amount in ${baseAsset}`}
                 />
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <Button className="w-full bg-[#0ecb81] hover:bg-[#0ecb81]/90">Buy</Button>
-                <Button className="w-full bg-[#f6465d] hover:bg-[#f6465d]/90">Sell</Button>
+                <Button
+                  className="w-full bg-[#0ecb81] hover:bg-[#0ecb81]/90"
+                  onClick={() => {
+                    setOrderSide('buy');
+                    handleSubmit();
+                  }}
+                >
+                  {isWalletConnected ? 'Buy' : 'Connect Wallet'}
+                </Button>
+                <Button
+                  className="w-full bg-[#f6465d] hover:bg-[#f6465d]/90"
+                  onClick={() => {
+                    setOrderSide('sell');
+                    handleSubmit();
+                  }}
+                  disabled={!isWalletConnected}
+                >
+                  Sell
+                </Button>
               </div>
             </div>
           </TabsContent>
@@ -51,25 +122,49 @@ export function TradePanel({ symbol = 'BTC/USDT' }: { symbol?: string }) {
           <TabsContent value="market">
             <div className="space-y-4">
               <div>
-                <label className="text-sm font-medium">Amount</label>
+                <div className="flex justify-between mb-1">
+                  <label className="text-sm font-medium">Amount</label>
+                  {!isLoadingBalances && (
+                    <span className="text-sm text-muted-foreground">
+                      Balance: {baseBalance.toFixed(4)} {baseAsset}
+                    </span>
+                  )}
+                </div>
                 <Input
                   type="number"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
-                  placeholder="Enter amount"
+                  placeholder={`Enter amount in ${baseAsset}`}
                 />
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <Button className="w-full bg-[#0ecb81] hover:bg-[#0ecb81]/90">Buy Market</Button>
-                <Button className="w-full bg-[#f6465d] hover:bg-[#f6465d]/90">Sell Market</Button>
+                <Button
+                  className="w-full bg-[#0ecb81] hover:bg-[#0ecb81]/90"
+                  onClick={() => {
+                    setOrderSide('buy');
+                    handleSubmit();
+                  }}
+                >
+                  {isWalletConnected ? 'Buy Market' : 'Connect Wallet'}
+                </Button>
+                <Button
+                  className="w-full bg-[#f6465d] hover:bg-[#f6465d]/90"
+                  onClick={() => {
+                    setOrderSide('sell');
+                    handleSubmit();
+                  }}
+                  disabled={!isWalletConnected}
+                >
+                  Sell Market
+                </Button>
               </div>
             </div>
           </TabsContent>
         </Tabs>
       </div>
 
-      {/* OrderBook */}
-      <div className="flex-1 min-h-0 overflow-auto">
+      {/* Order Book */}
+      <div className="flex-1 overflow-auto">
         <OrderBook symbol={symbol} />
       </div>
     </div>

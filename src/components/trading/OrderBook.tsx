@@ -2,13 +2,18 @@
 
 import { useState, useEffect, useCallback } from 'react';
 
+interface OrderBookProps {
+  symbol?: string;
+  className?: string;
+}
+
 interface OrderBookEntry {
   price: string;
   quantity: string;
   total?: string;
 }
 
-export function OrderBook({ symbol = 'BTC/USDT' }: { symbol?: string }) {
+export function OrderBook({ symbol = 'BTC/USDT', className }: OrderBookProps) {
   const [bids, setBids] = useState<OrderBookEntry[]>([]);
   const [asks, setAsks] = useState<OrderBookEntry[]>([]);
   const [currentPrice, setCurrentPrice] = useState<string>('0');
@@ -68,38 +73,38 @@ export function OrderBook({ symbol = 'BTC/USDT' }: { symbol?: string }) {
   }, [connectWebSocket]);
 
   return (
-    <div className="flex flex-col h-full bg-card">
-      {/* Header */}
-      <div className="sticky top-0 grid grid-cols-3 gap-2 px-4 py-2 text-xs font-medium text-muted-foreground bg-card border-b">
-        <div>Price(USDT)</div>
-        <div>Size(BTC)</div>
-        <div>Total</div>
-      </div>
-
-      {/* Asks (Sell orders) */}
-      <div className="flex-1 overflow-auto">
-        <div className="px-4 space-y-[2px] mb-2">
+    <div className={className}>
+      <div className="p-4 space-y-4">
+        <h3 className="text-lg font-semibold">Order Book</h3>
+        <div className="grid grid-cols-3 text-sm text-muted-foreground mb-2">
+          <div>Price</div>
+          <div className="text-right">Amount</div>
+          <div className="text-right">Total</div>
+        </div>
+        
+        {/* Asks (Sell orders) */}
+        <div className="space-y-1">
           {asks.slice().reverse().map((ask, i) => (
-            <div key={i} className="grid grid-cols-3 gap-2 text-xs">
-              <div className="text-[#f6465d]">{parseFloat(ask.price).toFixed(2)}</div>
-              <div>{parseFloat(ask.quantity).toFixed(5)}</div>
-              <div>{ask.total}</div>
+            <div key={i} className="grid grid-cols-3 text-sm text-red-500">
+              <div>{parseFloat(ask.price).toFixed(2)}</div>
+              <div className="text-right">{parseFloat(ask.quantity).toFixed(6)}</div>
+              <div className="text-right">{ask.total}</div>
             </div>
           ))}
         </div>
 
         {/* Current Price */}
-        <div className="sticky z-10 px-4 py-2 text-sm font-medium border-y text-center bg-black/10">
-          {currentPrice}
+        <div className="py-2 text-center font-bold text-lg">
+          ${currentPrice}
         </div>
 
         {/* Bids (Buy orders) */}
-        <div className="px-4 space-y-[2px] mt-2">
+        <div className="space-y-1">
           {bids.map((bid, i) => (
-            <div key={i} className="grid grid-cols-3 gap-2 text-xs">
-              <div className="text-[#0ecb81]">{parseFloat(bid.price).toFixed(2)}</div>
-              <div>{parseFloat(bid.quantity).toFixed(5)}</div>
-              <div>{bid.total}</div>
+            <div key={i} className="grid grid-cols-3 text-sm text-green-500">
+              <div>{parseFloat(bid.price).toFixed(2)}</div>
+              <div className="text-right">{parseFloat(bid.quantity).toFixed(6)}</div>
+              <div className="text-right">{bid.total}</div>
             </div>
           ))}
         </div>

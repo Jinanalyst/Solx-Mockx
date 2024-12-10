@@ -69,7 +69,7 @@ export function Positions() {
                 <TableCell>
                   <div className="flex items-center gap-2">
                     {position.pair}
-                    <Badge variant={position.type === 'long' ? 'success' : 'destructive'}>
+                    <Badge variant={position.type === 'long' ? 'default' : 'destructive'} className={position.type === 'long' ? 'bg-green-500 hover:bg-green-600' : ''}>
                       {position.type.toUpperCase()}
                     </Badge>
                   </div>

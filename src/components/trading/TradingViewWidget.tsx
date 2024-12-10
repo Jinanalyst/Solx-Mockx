@@ -11,11 +11,17 @@ declare global {
 
 interface TradingViewWidgetProps {
   symbol?: string;
+  interval?: string;
+  theme?: 'light' | 'dark';
 }
 
-export const TradingViewWidget = memo(({ symbol = 'BTCUSDT' }: TradingViewWidgetProps) => {
+export const TradingViewWidget = memo(({ 
+  symbol = 'BTCUSDT',
+  interval = 'D',
+  theme: themeOverride
+}: TradingViewWidgetProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const { theme } = useTheme();
+  const { theme: systemTheme } = useTheme();
 
   useEffect(() => {
     const script = document.createElement('script');
@@ -26,9 +32,9 @@ export const TradingViewWidget = memo(({ symbol = 'BTCUSDT' }: TradingViewWidget
     const config = {
       autosize: true,
       symbol: `BINANCE:${symbol}`,
-      interval: "D",
+      interval: interval,
       timezone: "Etc/UTC",
-      theme: theme === 'dark' ? 'dark' : 'light',
+      theme: themeOverride || (systemTheme === 'dark' ? 'dark' : 'light'),
       style: "1",
       locale: "en",
       enable_publishing: false,
@@ -49,22 +55,13 @@ export const TradingViewWidget = memo(({ symbol = 'BTCUSDT' }: TradingViewWidget
             enabled: true,
             showInToolbar: true,
             toolbarPosition: 'top'
-          },
-          'Stop & Target': {
-            enabled: true,
-            showInToolbar: true,
-            toolbarPosition: 'top'
           }
         }
-      },
-      overlays: {
-        enabled: true,
-        default: []
       }
     };
 
     script.innerHTML = JSON.stringify(config);
-    
+
     if (containerRef.current) {
       containerRef.current.innerHTML = '';
       containerRef.current.appendChild(script);
@@ -75,12 +72,10 @@ export const TradingViewWidget = memo(({ symbol = 'BTCUSDT' }: TradingViewWidget
         containerRef.current.innerHTML = '';
       }
     };
-  }, [theme, symbol]);
+  }, [symbol, interval, systemTheme, themeOverride]);
 
   return (
-    <div className="w-full h-full min-h-[400px]">
-      <div className="tradingview-widget-container" ref={containerRef} />
-    </div>
+    <div ref={containerRef} className="tradingview-widget-container" style={{ height: '100%', width: '100%' }} />
   );
 });
 

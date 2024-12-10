@@ -57,7 +57,6 @@ export const MockTradingPage: React.FC = () => {
           <div className="h-[65%] min-h-[400px] border-b border-gray-800">
             <TradingViewWidget
               symbol="BTCUSDT"
-              theme="dark"
               interval={selectedTimeframe}
             />
           </div>
@@ -66,7 +65,7 @@ export const MockTradingPage: React.FC = () => {
           <div className="flex flex-1">
             <OrderBook
               className="w-1/2 border-r border-gray-800"
-              pair="BTC/USDT"
+              symbol="BTC/USDT"
             />
             <div className="w-1/2 flex flex-col">
               <div className="border-b border-gray-800 px-4 py-2">
