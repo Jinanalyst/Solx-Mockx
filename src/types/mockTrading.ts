@@ -32,8 +32,8 @@ export interface MockPosition {
 export interface MockBalance {
   symbol: string;
   asset: string;
-  free: number;
-  locked: number;
+  free: number | BN;
+  locked: number | BN;
 }
 
 export interface MockTrade {

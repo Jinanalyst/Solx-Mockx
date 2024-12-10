@@ -24,11 +24,12 @@ function PortfolioOverview() {
   const { userSolxStake, userMockxStake } = useStaking();
 
   const totalBalance = balances.reduce((sum: number, balance: MockBalance) => {
-    // Convert BN values to numbers
+    // Handle free balance
     const free = balance.free instanceof BN ? 
       Number(balance.free.toString()) / 1e6 : 
       Number(balance.free) / 1e6;
     
+    // Handle locked balance
     const locked = balance.locked instanceof BN ? 
       Number(balance.locked.toString()) / 1e6 : 
       Number(balance.locked) / 1e6;
