@@ -4,7 +4,7 @@ import { Providers } from './providers';
 import { WalletProvider } from '@/contexts/WalletContext';
 import { MockBalanceProvider } from '@/contexts/MockBalanceContext';
 import { Navbar } from '@/components/Navbar';
-import { ThemeProvider } from '../contexts/ThemeContext';
+import { ThemeProvider } from 'next-themes';
 import { setInitialTheme } from './theme-script';
 import { PriceProvider } from '@/contexts/PriceContext';
 
