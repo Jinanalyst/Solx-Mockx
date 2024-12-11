@@ -145,7 +145,7 @@ export function TradingView({ pair = 'SOL' }: ChartContainerProps) {
     try {
       activeIndicators.forEach(indicatorName => {
         switch (indicatorName) {
-          case 'EMA':
+          case 'EMA': {
             const ema = calculateEMA(data, 20);
             if (!chartRef.current) return;
             const emaSeries = chartRef.current.addLineSeries({
@@ -161,8 +161,9 @@ export function TradingView({ pair = 'SOL' }: ChartContainerProps) {
               color: '#2962FF'
             };
             break;
+          }
 
-          case 'SMA':
+          case 'SMA': {
             const sma = calculateSMA(data, 20);
             if (!chartRef.current) return;
             const smaSeries = chartRef.current.addLineSeries({
@@ -178,8 +179,9 @@ export function TradingView({ pair = 'SOL' }: ChartContainerProps) {
               color: '#FF6B6B'
             };
             break;
+          }
 
-          case 'RSI':
+          case 'RSI': {
             const rsi = calculateRSI(data);
             if (!chartRef.current) return;
             const rsiSeries = chartRef.current.addLineSeries({
@@ -200,8 +202,9 @@ export function TradingView({ pair = 'SOL' }: ChartContainerProps) {
               color: '#33CC33'
             };
             break;
+          }
 
-          case 'MACD':
+          case 'MACD': {
             const macdData = calculateMACD(data);
             if (!chartRef.current) return;
             const macdSeries = chartRef.current.addLineSeries({
@@ -239,8 +242,9 @@ export function TradingView({ pair = 'SOL' }: ChartContainerProps) {
               color: '#9966FF'
             };
             break;
+          }
 
-          case 'BB':
+          case 'BB': {
             const bb = calculateBollingerBands(data);
             if (!chartRef.current) return;
             const upperSeries = chartRef.current.addLineSeries({
@@ -282,6 +286,7 @@ export function TradingView({ pair = 'SOL' }: ChartContainerProps) {
               color: '#9966FF'
             };
             break;
+          }
         }
       });
     } catch (err) {

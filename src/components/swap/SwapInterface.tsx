@@ -38,12 +38,12 @@ export function SwapInterface({ onError }: SwapInterfaceProps) {
 
   // Fetch token data when wallet connects
   useEffect(() => {
-    const fetchTokenData = async () => {
-      if (!publicKey) {
-        setTokens([]);
-        return;
-      }
+    if (!publicKey) {
+      onError('Please connect your wallet');
+      return;
+    }
 
+    const fetchTokenData = async () => {
       try {
         setLoading(true);
         const tokenData = await tokenService.getTokenData(publicKey.toString());
@@ -68,7 +68,7 @@ export function SwapInterface({ onError }: SwapInterfaceProps) {
     };
 
     fetchTokenData();
-  }, [publicKey]);
+  }, [publicKey, tokenService, onError, toast]);
 
   // Calculate conversion rate
   const getConversionRate = (from: TokenInfo, to: TokenInfo) => {
